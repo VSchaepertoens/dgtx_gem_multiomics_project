@@ -1,5 +1,18 @@
-.Rproj.user
+# R
+.Rproj.user/
 .Rhistory
 .RData
 .Ruserdata
+
+
+# Python
+__pycache__/
+*.pyc
 env/
+.idea/
+
+# Data
+.data
+
+# OS
+.DS_Store
