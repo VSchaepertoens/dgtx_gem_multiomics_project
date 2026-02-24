@@ -1,4 +1,4 @@
-# CHO genome-scale models project
+# Multi-Model CHO GEM Contextualization & Validation
 ## 📄 Overview
 
 ## 🗂 Repository Structure
