@@ -4,6 +4,7 @@
 .RData
 .Ruserdata
 renv/
+R/gantt_table.R
 
 
 # Python
@@ -14,6 +15,20 @@ env/
 
 # Data
 .data
+figures/
+
+models/original/iCHO2441.xml
+models/original/iCHO3K_cho_prod_generic_unblocked.json
+models/original/iCHO3K_cho_prod_generic_unblocked.xml
+models/original/iCHO3K_cho_prod_generic_unblocked.mat
+models/original/iCHOv1.json
+models/original/iCHOv1.xml
+models/original/iCHOv1.mat
+
+presentations/
+
+
+
 
 # OS
 .DS_Store
