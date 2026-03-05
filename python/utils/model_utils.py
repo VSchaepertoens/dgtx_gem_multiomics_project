@@ -1,4 +1,4 @@
-# utils_model_loading.py
+# model_utils.py
 from pathlib import Path
 import cobra
 import pandas as pd
