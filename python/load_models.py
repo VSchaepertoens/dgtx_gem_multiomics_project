@@ -11,51 +11,15 @@ import pandas as pd
 import cobra
 import memote
 
-# %% Define project root automatically (relative to script location)
-BASE_DIR = Path().resolve()
-MODELS_DIR = BASE_DIR / "models" / "original"
+# Import the utility function
+from python.utils.model_utils import load_models, get_models_dir
 
-print(f"Project root: {BASE_DIR}")
-print(f"Models directory: {MODELS_DIR}")
+# %% Set-up models dirs
+MODELS_DIR = get_models_dir()
 
-# %% Load all SBML models in models/original
-models = {}
-summary_data = []
+# %% Load all models using utility function
+models, summary_df = load_models()
 
-for model_file in MODELS_DIR.glob("*.xml"):
-    model_name = model_file.stem
-
-    print(f"\nLoading {model_name}...")
-
-    try:
-        model = cobra.io.read_sbml_model(model_file)
-        models[model_name] = model
-
-        # Objective expression as string
-        obj_expr = str(model.objective.expression)
-
-        # Optional: try to extract first reaction ID from expression string
-        # This assumes reaction IDs appear in the SBML IDs
-        obj_rxn = obj_expr.split('*')[1].split()[0] if '*' in obj_expr else obj_expr
-
-        summary_data.append({
-            "model_name": model_name,
-            "reactions": len(model.reactions),
-            "metabolites": len(model.metabolites),
-            "genes": len(model.genes),
-            "compartments": len(model.compartments),
-            "objective": obj_expr,
-            "objective_rxn": obj_rxn,
-        })
-
-        print(f"Loaded {model_name} successfully!")
-
-    except Exception as e:
-        print(f"Error loading {model_name}: {e}")
-
-# %% Create summary dataframe
-summary_df = pd.DataFrame(summary_data)
-# Print objective column only
 print(summary_df[["model_name", "objective_rxn"]])
 
 # %% Check biomass metabolites for each model
