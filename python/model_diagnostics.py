@@ -10,6 +10,8 @@ from cobra.medium import minimal_medium
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+# %% Hard-coded save directories
+from pathlib import Path
 
 # %% Section 1:  Load models
 models, summary_df = load_models()
@@ -497,6 +499,20 @@ comparison_df = pd.DataFrame(comparison_results)
 print("\n✅ Final combined comparison table ready!")
 print(comparison_df)
 
+# %%  Save final comparison table
+# Project root is two levels up from python/
+PROJECT_ROOT = Path.cwd()
+ANALYSIS_MODELS_DIR = PROJECT_ROOT / "analysis" / "models" / "original"
+
+# Create directories if they don't exist
+ANALYSIS_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+print(f"Results will be saved to: {ANALYSIS_MODELS_DIR}")
+
+comparison_csv_path = ANALYSIS_MODELS_DIR / "model_comparison_final.csv"
+comparison_df.to_csv(comparison_csv_path, index=False)
+print(f"✅ Comparison table saved at {comparison_csv_path}")
+
 # %% Section 10: Plotting model diagnostics
 sns.set(style="whitegrid", context="talk")
 
@@ -525,7 +541,10 @@ df_melted = comparison_df.melt(
 # Replace underscores for nicer labels
 df_melted["Condition"] = df_melted["Condition"].str.replace("_", " ").str.title()
 
-# %% Plot: ATP fluxes across conditions
+ #%%
+# -----------------------------
+# 1️⃣ ATP Flux Diagnostics Plot
+# -----------------------------
 
 # Create a mapping for shorter labels
 short_labels = {
@@ -546,9 +565,23 @@ plt.title("ATP Flux Diagnostics Across Models and Conditions")
 plt.xticks(rotation=0)  # rotation optional, can be 45 if needed
 plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
 plt.tight_layout()
-plt.show()
 
-# %% Optional: Other diagnostics plots
+# Project root is two levels up from python/
+FIGURES_MODELS_DIR = PROJECT_ROOT / "figures" / "models" / "original"
+
+# Create directories if they don't exist
+FIGURES_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Save plot
+flux_plot_path = FIGURES_MODELS_DIR / "ATP_flux_diagnostics.png"
+plt.savefig(flux_plot_path, dpi=300)
+plt.show()
+print(f"✅ ATP flux plot saved at {flux_plot_path}")
+
+# %% Plot 2 Model Stats: Reactions, Metabolites, Genes
+# ---------------------------------
+# 2️⃣ Model Stats: Reactions, Metabolites, Genes
+# ---------------------------------
 
 # Add a new column for plotting
 comparison_df['model_short'] = comparison_df['model_name'].map(short_labels)
@@ -571,3 +604,54 @@ for ax in axes:
 
 plt.tight_layout()
 plt.show()
+
+# %% Plot 3:   Blocked Reactions Plot
+# ---------------------------------
+# 3️⃣  Blocked Reactions Plot
+# ---------------------------------
+plt.figure(figsize=(8,5))
+sns.barplot(data=blocked_df, x=blocked_df['model_name'].map(short_labels), y="num_blocked_reactions")
+plt.ylabel("Number of Blocked Reactions")
+plt.xlabel("Model")
+plt.title("Blocked Reactions per Model")
+plt.xticks(rotation=0)
+plt.tight_layout()
+
+blocked_plot_path = ANALYSIS_MODELS_DIR / "blocked_reactions.png"
+plt.savefig(blocked_plot_path, dpi=300)
+plt.show()
+print(f"✅ Saved blocked reactions plot at {blocked_plot_path}")
+
+# %% plot 4 :  FVA: ATP min/max fluxes per model
+plt.figure(figsize=(8,5))
+
+# Create error bars for min/max flux
+comparison_df['FVA_range'] = comparison_df['ATP_FVA_max'] - comparison_df['ATP_FVA_min']
+
+sns.barplot(
+    data=comparison_df,
+    x='model_short',
+    y='ATP_FVA_min',
+    color='skyblue',
+    label='Min ATP Flux'
+)
+sns.barplot(
+    data=comparison_df,
+    x='model_short',
+    y='FVA_range',
+    bottom=comparison_df['ATP_FVA_min'],
+    color='orange',
+    label='Max ATP Flux'
+)
+
+plt.ylabel("ATP Flux (FVA)")
+plt.xlabel("Model")
+plt.title("ATP Flux Variability Analysis (FVA) per Model")
+plt.legend()
+plt.tight_layout()
+
+# Save figure
+fva_plot_path = ANALYSIS_MODELS_DIR / "ATP_FVA.png"
+plt.savefig(fva_plot_path, dpi=300)
+plt.show()
+print(f"✅ Saved ATP FVA plot at {fva_plot_path}")
