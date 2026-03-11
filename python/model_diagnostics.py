@@ -25,6 +25,12 @@ exchange_results = []
 transporter_results = {}
 
 # %% Section 3: Define key reactions for each model
+biomass_reactions = {
+    "iCHO3K_cho_prod_generic_unblocked": "biomass_cho_prod",
+    "iCHO2441": "biomass_cho_prod",
+    "iCHOv1": "BIOMASS_cho_producing"
+}
+
 oxygen_exchanges = {
     "iCHO3K_cho_prod_generic_unblocked": "EX_o2_e",
     "iCHO2441": "EX_o2(e)",
@@ -233,45 +239,6 @@ for model_name, model in models.items():
             "atp_flux_all_exchanges": atp_flux
         })
 
-# # %% Section: Compile final comparison table
-# comparison_results = []
-#
-# # Create lookup dicts for easy merging
-# energy_min_dict = {r["model_name"]: r["atp_flux_minimal"] for r in energy_results_minimal}
-# energy_min_ex_dict = {r["model_name"]: r["atp_flux_all_exchanges"] for r in energy_results_minimal_exchanges}
-# energy_glc_o2_dict = {r["model_name"]: r["atp_flux_glc_o2"] for r in energy_results_transporters if "atp_flux_glc_o2" in r}
-# energy_transporter_dict = {r["model_name"]: r["atp_flux_with_transporters"] for r in energy_results_transporters if "atp_flux_with_transporters" in r}
-#
-# for model_name, model in models.items():
-#     num_reactions = len(model.reactions)
-#     num_metabolites = len(model.metabolites)
-#     num_genes = len(model.genes)
-#     ex_entry = next((r for r in exchange_results if r["model_name"] == model_name), {})
-#     num_exchanges = ex_entry.get("num_exchanges", 0)
-#
-#     # Transporters
-#     transporters = transporter_results.get(model_name, {})
-#     glucose_transporters = transporters.get("glucose", [])
-#     oxygen_transporters = transporters.get("oxygen", [])
-#
-#     comparison_results.append({
-#         "model_name": model_name,
-#         "num_reactions": num_reactions,
-#         "num_metabolites": num_metabolites,
-#         "num_genes": num_genes,
-#         "num_exchanges": num_exchanges,
-#         "atp_flux_minimal": energy_min_dict.get(model_name),
-#         "atp_flux_all_exchanges": energy_min_ex_dict.get(model_name),
-#         "atp_flux_glc_o2": energy_glc_o2_dict.get(model_name),
-#         "atp_flux_with_transporters": energy_transporter_dict.get(model_name)
-#     })
-#
-# # Convert to DataFrame
-# comparison_df = pd.DataFrame(comparison_results)
-# #comparison_df.to_csv(f"{MODELS_DIR}/model_comparison_final.csv", index=False)
-# print("\n✅ Final comparison table ready!")
-# print(comparison_df)
-
 # %% Section 5 : Blocked reaction analysis
 blocked_results = []
 
@@ -449,7 +416,125 @@ for model_name, model in models.items():
             "ATP_max_flux_minimal_medium": atp_flux
         })
 
-# %% Section 9: Compile final comparison table
+
+# %% Section 9: Biomass feasibility check
+growth_results = []
+
+for model_name, model in models.items():
+
+    biomass_rxn_id = biomass_reactions[model_name]
+    biomass_rxn = model.reactions.get_by_id(biomass_rxn_id)
+
+    with model:
+        model.objective = biomass_rxn
+
+        solution = model.optimize()
+        growth_rate = solution.objective_value
+
+    growth_results.append({
+        "model": model_name,
+        "biomass_rxn": biomass_rxn_id,
+        "growth_rate": growth_rate,
+        "feasible": growth_rate > 1e-6
+    })
+
+growth_df = pd.DataFrame(growth_results)
+
+print(growth_df)
+
+# iCHO3K_cho_prod_generic_unblocked has glucose uptake unconstrained (lower_bound = 0, unconstrained = True).
+#
+# All other models have proper negative lower bounds for glucose (-10 or similar), which allows uptake.
+#
+# Oxygen is fine in all models.
+#
+# So the biomass infeasibility in iCHO3K is purely a medium/uptake issue, not a broken network.
+
+# %% Section 10: Biomass precursor feasibility check
+"""
+Check whether all metabolites consumed by the biomass reaction can be produced by the model.
+
+Conceptually:
+- The biomass reaction is like a recipe for growth: it consumes precursors (amino acids, nucleotides, ATP, etc.).
+- Growth fails if any single precursor cannot be produced.
+- To diagnose this, we test each precursor individually:
+    1. Add a temporary 'demand reaction' for the precursor (a sink allowing the metabolite to be exported).
+    2. Maximize this demand using FBA to see if the network can produce the metabolite.
+    3. Record whether the precursor is producible (max flux > 0).
+- This identifies exactly which metabolites block biomass formation without altering the original model.
+
+Outputs:
+- A DataFrame listing, for each model and precursor: max flux and producibility (True/False).
+"""
+def check_biomass_precursors(models, biomass_rxns):
+    """
+    Check producibility of all metabolites consumed by the biomass reaction in each model.
+
+    Args:
+        models (dict): model_name -> cobra.Model
+        biomass_rxns (dict): model_name -> biomass reaction ID
+
+    Returns:
+        pd.DataFrame: model, metabolite, max_flux, producible
+    """
+    precursor_results = []
+
+    for model_name, model in models.items():
+        biomass_rxn_id = biomass_rxns[model_name]
+        biomass_rxn = model.reactions.get_by_id(biomass_rxn_id)
+
+        # metabolites consumed in biomass (coeff < 0)
+        biomass_precursors = [m for m, coeff in biomass_rxn.metabolites.items() if coeff < 0]
+        print(f"{model_name}: Consumed by biomass = {biomass_precursors}")
+
+        for met in biomass_precursors:
+            with model:
+                # add a temporary demand reaction
+                demand_rxn = model.add_boundary(met, type="demand")
+                model.objective = demand_rxn
+
+                sol = model.optimize()
+
+                precursor_results.append({
+                    "model": model_name,
+                    "metabolite": met.id,
+                    "max_flux": sol.objective_value,
+                    "producible": sol.objective_value > 1e-9
+                })
+
+    return pd.DataFrame(precursor_results)
+
+# run the check
+precursor_df = check_biomass_precursors(models, biomass_reactions)
+
+# quickly inspect problematic precursors
+problem_precursors = precursor_df[precursor_df["producible"] == False]
+print("\nBlocked biomass precursors:")
+print(problem_precursors)
+
+
+# # Run the precursor check with temporary glucose/oxygen uptake
+# icho3k = models["iCHO3K_cho_prod_generic_unblocked"]
+#
+# with icho3k:  # Changes inside this block are temporary
+#     # Open glucose and oxygen uptake
+#     icho3k.reactions.get_by_id("EX_glc_e").lower_bound = -1000
+#     icho3k.reactions.get_by_id("EX_glc_e").upper_bound = 1000
+#     icho3k.reactions.get_by_id("EX_o2_e").lower_bound = -1000
+#     icho3k.reactions.get_by_id("EX_o2_e").upper_bound = 1000
+#
+#     # Run the precursor check
+#     precursor_df = check_biomass_precursors(
+#         {"iCHO3K_cho_prod_generic_unblocked": icho3k},
+#         {"iCHO3K_cho_prod_generic_unblocked": biomass_reactions["iCHO3K_cho_prod_generic_unblocked"]}
+#     )
+#
+# # Inspect problematic precursors
+# problem_precursors = precursor_df[precursor_df["producible"] == False]
+# print("\nBlocked biomass precursors:")
+# print(problem_precursors)
+
+# %% Section 11: Compile final comparison table
 comparison_results = []
 
 # Create lookup dicts for easy merging
@@ -462,9 +547,37 @@ energy_min_ex_dict = {
 energy_glc_o2_dict = {r["model_name"]: r["atp_flux_glc_o2"] for r in energy_results_transporters if "atp_flux_glc_o2" in r}
 energy_transporter_dict = {r["model_name"]: r["atp_flux_with_transporters"] for r in energy_results_transporters if "atp_flux_with_transporters" in r}
 blocked_dict = {r["model_name"]: r["num_blocked_reactions"] for r in blocked_results}
+blocked_rxn_ids = {r["model_name"]: r["blocked_reactions"] for r in blocked_results}
 fva_min_dict = {r["model_name"]: r["ATP_min_flux"] for r in fva_results}
 fva_max_dict = {r["model_name"]: r["ATP_max_flux"] for r in fva_results}
 minimal_medium_flux_dict = {r["model_name"]: r["ATP_max_flux_minimal_medium"] for r in minimal_medium_flux_results}
+# Minimal medium info
+minimal_medium_series = minimal_media_dict.get(model_name)
+if minimal_medium_series is not None:
+    minimal_medium_reactions = minimal_medium_series.index.tolist()
+    minimal_medium_fluxes = minimal_medium_series.to_dict()
+    # Optional: formatted string for CSV readability
+    minimal_medium_str = "; ".join(f"{rxn}:{flux:.6f}" for rxn, flux in minimal_medium_fluxes.items())
+else:
+    minimal_medium_reactions = []
+    minimal_medium_fluxes = {}
+    minimal_medium_str = None
+
+growth_feasible_dict = {r["model"]: r["feasible"] for r in growth_results}
+growth_rate_dict = {r["model"]: r["growth_rate"] for r in growth_results}
+
+# Number of blocked precursors per model
+blocked_precursors = (
+    precursor_df[precursor_df["producible"] == False]
+    .groupby("model")
+    .size()
+    .to_dict()
+)
+
+# Fraction of blocked precursors (optional)
+total_precursors = precursor_df.groupby("model").size().to_dict()
+blocked_fraction = {m: blocked_precursors.get(m, 0)/total_precursors[m] for m in models.keys()}
+
 
 for model_name, model in models.items():
     # Basic model stats
@@ -481,20 +594,26 @@ for model_name, model in models.items():
         "num_genes": num_genes,
         "num_exchanges": num_exchanges,
         "num_blocked_reactions": blocked_dict.get(model_name),
+        "blocked_reaction_ids": blocked_rxn_ids.get(model_name, []),
         "atp_flux_minimal": energy_min_dict.get(model_name),
         "atp_flux_glc_o2": energy_glc_o2_dict.get(model_name),
         "atp_flux_with_transporters": energy_transporter_dict.get(model_name),
         "atp_flux_all_exchanges": energy_min_ex_dict.get(model_name),
         "ATP_FVA_min": fva_min_dict.get(model_name),
         "ATP_FVA_max": fva_max_dict.get(model_name),
-        "ATP_max_flux_minimal_medium": minimal_medium_flux_dict.get(model_name)
+        "ATP_max_flux_minimal_medium": minimal_medium_flux_dict.get(model_name),
+        # Add minimal medium columns
+        "minimal_medium_reactions": minimal_medium_reactions,
+        "minimal_medium_fluxes": minimal_medium_fluxes,
+        "minimal_medium_str": minimal_medium_str,
+        "biomass_feasible": growth_feasible_dict.get(model_name),
+        "biomass_growth_rate": growth_rate_dict.get(model_name),
+        "num_blocked_biomass_precursors": blocked_precursors.get(model_name, 0),
+        "fraction_blocked_precursors": blocked_fraction.get(model_name, 0)
     })
 
 # Convert to DataFrame
 comparison_df = pd.DataFrame(comparison_results)
-
-# Save if needed
-# comparison_df.to_csv(f"{MODELS_DIR}/model_comparison_final.csv", index=False)
 
 print("\n✅ Final combined comparison table ready!")
 print(comparison_df)
@@ -513,7 +632,7 @@ comparison_csv_path = ANALYSIS_MODELS_DIR / "model_comparison_final.csv"
 comparison_df.to_csv(comparison_csv_path, index=False)
 print(f"✅ Comparison table saved at {comparison_csv_path}")
 
-# %% Section 10: Plotting model diagnostics
+# %% Section 12: Plotting model diagnostics
 sns.set(style="whitegrid", context="talk")
 
 # List of flux columns to plot
@@ -541,7 +660,7 @@ df_melted = comparison_df.melt(
 # Replace underscores for nicer labels
 df_melted["Condition"] = df_melted["Condition"].str.replace("_", " ").str.title()
 
- #%%
+ #%% Plot 1 ATP Flux Diagnostics Plot
 # -----------------------------
 # 1️⃣ ATP Flux Diagnostics Plot
 # -----------------------------
@@ -617,12 +736,15 @@ plt.title("Blocked Reactions per Model")
 plt.xticks(rotation=0)
 plt.tight_layout()
 
-blocked_plot_path = ANALYSIS_MODELS_DIR / "blocked_reactions.png"
+blocked_plot_path = FIGURES_MODELS_DIR / "blocked_reactions.png"
 plt.savefig(blocked_plot_path, dpi=300)
 plt.show()
 print(f"✅ Saved blocked reactions plot at {blocked_plot_path}")
 
 # %% plot 4 :  FVA: ATP min/max fluxes per model
+# ---------------------------------
+# 3️⃣  FVA: ATP min/max fluxes per model
+# ---------------------------------
 plt.figure(figsize=(8,5))
 
 # Create error bars for min/max flux
@@ -651,7 +773,7 @@ plt.legend()
 plt.tight_layout()
 
 # Save figure
-fva_plot_path = ANALYSIS_MODELS_DIR / "ATP_FVA.png"
+fva_plot_path = FIGURES_MODELS_DIR / "ATP_FVA.png"
 plt.savefig(fva_plot_path, dpi=300)
 plt.show()
 print(f"✅ Saved ATP FVA plot at {fva_plot_path}")

@@ -1,5 +1,4 @@
 # model_utils.py
-from pathlib import Path
 import cobra
 import pandas as pd
 
@@ -7,7 +6,7 @@ from pathlib import Path
 
 def get_models_dir():
     """
-    Return the path to the models/original folder relative to the project root.
+    Return both the project root (BASE_DIR) and the path to models/original folder.
     Assumes this utility is in python/utils/
     """
     # Project root is two levels up from utils/
