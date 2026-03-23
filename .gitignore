@@ -18,6 +18,7 @@ env/
 figures/
 
 models/original/iCHO2441.xml
+models/original/iCHO2441.mat
 models/original/iCHO3K_cho_prod_generic_unblocked.json
 models/original/iCHO3K_cho_prod_generic_unblocked.xml
 models/original/iCHO3K_cho_prod_generic_unblocked.mat
