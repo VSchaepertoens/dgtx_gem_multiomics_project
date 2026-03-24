@@ -1,39 +1,60 @@
 # model_utils.py
 import cobra
 import pandas as pd
-
 from pathlib import Path
+from typing import Optional, Tuple, Dict
 
-def get_models_dir():
+def get_models_dir(mode: str = "original", custom_path: Optional[Path] = None) -> Path:
     """
-    Return both the project root (BASE_DIR) and the path to models/original folder.
-    Assumes this utility is in python/utils/
+    Return the path to the models folder.
+
+    Parameters:
+        mode (str): Either "original", "GIMME", or "mCADRE" (future). Default is "original".
+        custom_path (Path, optional): If provided, this path is returned directly.
+
+    Returns:
+        Path: The folder containing the SBML models.
     """
+    if custom_path is not None:
+        return Path(custom_path).resolve()
+
     # Project root is two levels up from utils/
     BASE_DIR = Path(__file__).resolve().parent.parent.parent
-    MODELS_DIR = BASE_DIR / "models" / "original"
+
+    if mode == "original":
+        MODELS_DIR = BASE_DIR / "models" / "original"
+    elif mode == "GIMME":
+        MODELS_DIR = BASE_DIR / "models" / "contextualized" / "GIMME"
+    elif mode == "mCADRE":
+        MODELS_DIR = BASE_DIR / "models" / "contextualized" / "mCADRE"
+    else:
+        raise ValueError(f"Unknown mode '{mode}'. Choose 'original', 'GIMME', or 'mCADRE'.")
+
     return MODELS_DIR
 
-def load_models():
+def load_models(models_folder: Optional[Path] = None) -> Tuple[Dict[str, cobra.Model], pd.DataFrame]:
     """
-    Load all SBML models from models/original, create a summary dataframe,
-    and return both the models dictionary, the summary, and the models folder path.
+    Load all SBML models from a given folder, create a summary dataframe,
+    and return both the models dictionary and the summary.
+
+    Parameters:
+        models_folder (Path, optional): Path to folder containing SBML models.
+                                        If None, defaults to get_models_dir(mode="original").
 
     Returns:
         models (dict): model_name -> cobra.Model
-        summary_df (pd.DataFrame): summary information about each model
+        summary_df (pd.DataFrame): Summary information about each model
     """
-    # Project root is two levels up from utils/
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
-    MODELS_DIR = BASE_DIR / "models" / "original"
+    if models_folder is None:
+        models_folder = get_models_dir()
 
-    print(f"Project root: {BASE_DIR}")
-    print(f"Models directory: {MODELS_DIR}")
+    models_folder = Path(models_folder).resolve()
+    print(f"Loading models from folder: {models_folder}")
 
     models = {}
     summary_data = []
 
-    for model_file in MODELS_DIR.glob("*.xml"):
+    for model_file in models_folder.glob("*.xml"):
         model_name = model_file.stem
         print(f"\nLoading {model_name}...")
         try:
@@ -42,8 +63,6 @@ def load_models():
 
             # Objective expression as string
             obj_expr = str(model.objective.expression)
-
-            # Try to extract first reaction ID from expression string
             obj_rxn = obj_expr.split('*')[1].split()[0] if '*' in obj_expr else obj_expr
 
             summary_data.append({
@@ -61,7 +80,5 @@ def load_models():
         except Exception as e:
             print(f"Error loading {model_name}: {e}")
 
-    # Create summary dataframe
     summary_df = pd.DataFrame(summary_data)
-
     return models, summary_df

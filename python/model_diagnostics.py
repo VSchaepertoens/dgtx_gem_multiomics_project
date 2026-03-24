@@ -14,8 +14,8 @@ import seaborn as sns
 from pathlib import Path
 
 # %% Section 1:  Load models
-models, summary_df = load_models()
-MODELS_DIR = get_models_dir()
+MODELS_DIR = get_models_dir(mode="GIMME")
+models, summary_df = load_models(MODELS_DIR)
 
 # %% Section 2: Initialize results containers
 energy_results_minimal = []
@@ -64,10 +64,109 @@ glucose_oxygen_transporters = {
         "oxygen": ["O2t", "O2ter", "O2St"]
     }
 }
+# %% Function to map contextualized filenames to common names
+def get_common_model_name(model_name: str) -> str:
+    """
+    Strips suffixes like '_Constant_X_GIMME' to return the original/common model name
+    """
+    # Remove suffix starting with '_Constant'
+    if "_Constant" in model_name:
+        common_name = model_name.split("_Constant")[0]
+    elif "_Temp. shifted" in model_name:
+        common_name = model_name.split("_Temp. shifted")[0]
+    elif "_GIMME" in model_name:
+        common_name = model_name.split("_GIMME")[0]
+    else:
+        common_name = model_name
+    return common_name
+
+
+# # Example usage within diagnostics loop:
+# for model_name, model in models.items():
+#     common_name = get_common_model_name(model_name)
+#
+#     biomass_rxn = biomass_reactions.get(common_name)
+#     o2_rxn = oxygen_exchanges.get(common_name)
+#     glc_rxn = glucose_exchanges.get(common_name)
+#     atp_rxn = atp_reactions.get(common_name)
+#     transporters = glucose_oxygen_transporters.get(common_name, {})
+#
+#     if biomass_rxn is None:
+#         print(f"Warning: No biomass reaction defined for model {model_name} (common: {common_name})")
+#     if o2_rxn is None or glc_rxn is None:
+#         print(f"Warning: Missing exchange reactions for {model_name} (common: {common_name})")
+#
+#     # Now you can use biomass_rxn, o2_rxn, glc_rxn, atp_rxn, transporters safely
+
+# %% # Debugging the compartments issue
+# for model_name, model in models.items():
+#     print(f"\nModel: {model_name}")
+#     print("Compartments:", model.compartments)
+#     # Optional: count metabolites per compartment
+#     compartment_counts = {}
+#     for met in model.metabolites:
+#         compartment_counts[met.compartment] = compartment_counts.get(met.compartment, 0) + 1
+#     print("Metabolites per compartment:", compartment_counts)
+#
+# # Pick a model (adjust key if needed)
+# model_name = "iCHO3K_cho_prod_generic_unblocked"
+#
+# # Original vs contextualized
+# model_orig = models[model_name]
+# model_ctx = models_contextualized[[k for k in models_contextualized if model_name in k][0]]
+#
+# print("\nContextualized metabolite IDs (first 20):")
+# print([met.id for met in model_ctx.metabolites[:20]])
+#
+# print("\nContextualized metabolite compartments (unique):")
+# print(set([met.compartment for met in model_ctx.metabolites]))
+
+#%%
+def reconstruct_compartments(model):
+    """
+    Reconstruct metabolite compartments from ID suffixes (e.g. atp_c, glc__D_m)
+    and update model.compartments accordingly.
+    """
+    compartments = {}
+
+    for met in model.metabolites:
+        if "_" in met.id:
+            comp = met.id.split("_")[-1]
+        else:
+            comp = "c"  # fallback if no suffix
+
+        # Assign compartment to metabolite
+        met.compartment = comp
+
+        # Collect compartments
+        compartments[comp] = ""
+
+    # Update model compartments dictionary
+    model.compartments = compartments
+
+    return model
+
+# List of model name substrings to apply reconstruction to
+models_to_fix = ["iCHO3K_cho_prod_generic_unblocked", "iCHOv1"]
+
+for model_name, model in models.items():
+    if any(name in model_name for name in models_to_fix):
+        reconstruct_compartments(model)
+        print(f"Reconstructed compartments for {model_name}")
+
+for model_name, model in models.items():
+    print(f"\n--- {model_name} ---")
+
+    print("Unique metabolite compartments:")
+    print(set([met.compartment for met in model.metabolites]))
+
+    print("Model compartments dictionary:")
+    print(model.compartments)
 
 # %% Section 4.1: Minimal ATP flux and exchange reactions
 for model_name, model in models.items():
     print(f"\nRunning minimal ATP diagnostics for {model_name}...")
+    common_name = get_common_model_name(model_name)
 
     # Basic statistics
     num_reactions = len(model.reactions)
@@ -85,10 +184,18 @@ for model_name, model in models.items():
     # Energy metabolism test: Maximize ATP with all exchanges closed
     with model:
         for rxn in model.exchanges:
-            rxn.lower_bound = 0
-            rxn.upper_bound = 0
+            safe_lb = min(rxn.lower_bound, 0)
+            safe_ub = min(rxn.upper_bound, 0)
+            rxn.lower_bound = min(safe_lb, safe_ub)  # ensures lb <= ub
+            rxn.upper_bound = max(safe_lb, safe_ub)
 
-        atp_rxn_id = atp_reactions.get(model_name)
+            # # --- sanity check: print exchange reaction bounds ---
+            # print(f"\nExchange reaction bounds for {model_name} after closure:")
+            # for rxn in model.exchanges:
+            #     print(f"{rxn.id}: lb={rxn.lower_bound}, ub={rxn.upper_bound}")
+
+        #atp_rxn_id = atp_reactions.get(model_name)
+        atp_rxn_id = atp_reactions.get(common_name)
         if atp_rxn_id and atp_rxn_id in model.reactions:
             model.objective = model.reactions.get_by_id(atp_rxn_id)
             sol = model.optimize()
