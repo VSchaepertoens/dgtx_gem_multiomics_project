@@ -65,136 +65,137 @@ end
 
 %% 5. Define GIMME parameters
 % Threshold for keeping reactions (can be >0 or another value)
-exprThreshold = 0;  % since your data already contains zeros
+exprThreshold = 1;  
 
 
-%% 6.  Load experimental growth rates ---
-growthTable = readtable(fullfile(PROJECT_ROOT,'data','rates','growth_rate.csv'));
-% Optional: convert Condition & Window to strings if needed
-growthTable.Condition = string(growthTable.Condition);
-growthTable.Window    = string(growthTable.Window);
+% %% 6.  Load experimental growth rates ---
+% growthTable = readtable(fullfile(PROJECT_ROOT,'data','rates','growth_rate.csv'));
+% % Optional: convert Condition & Window to strings if needed
+% growthTable.Condition = string(growthTable.Condition);
+% growthTable.Window    = string(growthTable.Window);
+
+%% 
+function [contextModel, diagStruct] = processGIMMEContext(model, exprModel, contextExpr, exprThreshold, biomassFunc, modelName)
+% PROCESSGIMMECONTEXT Extracts context-specific model using GIMME
+%
+% Inputs:
+%   model       - COBRA model structure
+%   exprModel   - table with gene expression for current model
+%   contextExpr - name of the context column in exprModel
+%   exprThreshold - threshold for GIMME (RPKM/FPKM > 1)
+%   biomassFunc   - function handle or map to get correct biomass reaction
+%
+% Output:
+%   contextModel - GIMME-constrained context-specific model
+%   diagStruct - Diagnostics for each context
+
+    % --- Extract gene expression ---
+    genes  = exprModel.EntrezID;
+    values = exprModel.(contextExpr);
+    
+    % --- Ensure proper types ---
+    genes = cellstr(string(genes));   
+    values = double(values);          
+    
+    % --- Create struct for COBRA ---
+    geneExpStruct = struct();         
+    geneExpStruct.gene  = genes;
+    geneExpStruct.value = values;
+
+    % --- Map expression to reactions ---
+    [rxnScores, parsedGPR, gene_used] = mapExpressionToReactions(model, geneExpStruct);
+    rxnScores(isnan(rxnScores)) = -1;
+
+    % --- Diagnostics ---
+    numRxns = numel(model.rxns);
+    numMapped = sum(rxnScores >= 0);
+    numUnmapped = numRxns - numMapped;
+    fracAboveThreshold = sum(rxnScores >= exprThreshold) / numRxns;
+    overlapGenes = intersect(model.genes, geneExpStruct.gene);
+
+    diagStruct = struct();
+    diagStruct.modelName = modelName;
+    diagStruct.context = contextExpr;
+    diagStruct.numRxns = numRxns;
+    diagStruct.numMapped = numMapped;
+    diagStruct.numUnmapped = numUnmapped;
+    diagStruct.fracAboveThreshold = fracAboveThreshold;
+    diagStruct.minRxnScore = min(rxnScores);
+    diagStruct.medianRxnScore = median(rxnScores);
+    diagStruct.maxRxnScore = max(rxnScores);
+    diagStruct.numGenesWithExpr = numel(overlapGenes);
+    diagStruct.numGenesTotal = numel(model.genes);
+
+    fprintf('Reactions mapped: %d / %d, unmapped: %d\n', numMapped, numRxns, numUnmapped);
+    fprintf('Reaction scores: min=%.4f, median=%.4f, max=%.4f\n', ...
+        diagStruct.minRxnScore, diagStruct.medianRxnScore, diagStruct.maxRxnScore);
+    fprintf('Fraction of reactions above threshold (%.2f): %.2f%%\n', ...
+        exprThreshold, fracAboveThreshold*100);
+    fprintf('Genes with expression data: %d / %d\n', ...
+        diagStruct.numGenesWithExpr, diagStruct.numGenesTotal);
+
+    % --- Set the correct objective ---
+    objectiveRxn = biomassFunc();
+    model = changeObjective(model, objectiveRxn);
+    fprintf('Objective set to %s\n', objectiveRxn);
+
+    % --- Run GIMME ---
+    contextModel = GIMME(model, rxnScores, exprThreshold);
+    fprintf('Reactions: original %d, context-specific %d, removed %d\n', ...
+        numRxns, numel(contextModel.rxns), numRxns - numel(contextModel.rxns));
+
+    % --- Set model ID ---
+    contextModel.id = sprintf('%s_%s_GIMME', modelName, contextExpr);
+
+    % --- Add GIMME stats to diagnostics ---
+    diagStruct.numRxnsContext = numel(contextModel.rxns);
+    diagStruct.numRxnsRemoved = numRxns - numel(contextModel.rxns);
+
+end
 
 %% 7. Loop over models & condition-window columns
 
 constrainedFolder = fullfile(PROJECT_ROOT, 'models/exp_constrained');
 
-for m = 1:numel(modelNames)
+allDiags = [];  % initialize struct array
 
+for m = 1:numel(modelNames)
     currentModelName = modelNames{m};
     fprintf('\n=== Processing model: %s ===\n', currentModelName);
 
-    % Filter expression table for this model
     exprModel = exprTable(strcmp(exprTable.model, currentModelName), :);
-
-    % Identify context columns
     contextCols = exprModel.Properties.VariableNames(3:end);
 
-    % Convert context name to match constrained model naming
-    %contextFile = strrep(contextCols, '_W', '_');
+    for i = 1:numel(contextCols)
+        contextExpr = contextCols{i};
+        fprintf('Processing context: %s\n', contextExpr);
 
-    % Biomass reaction
-    objectiveRxn = biomassReactions(currentModelName);
+        constrainedModelFile = fullfile(constrainedFolder, ...
+            sprintf('%s_%s_constrained.mat', currentModelName, contextExpr));
 
-   for i = 1:numel(contextCols)
+        if ~isfile(constrainedModelFile)
+            warning('Model not found: %s', constrainedModelFile);
+            continue
+        end
 
-    % Name in expression table
-    contextExpr = contextCols{i};
+        model = readCbModel(constrainedModelFile);
 
-    % Name used in model files
-    contextFile = strrep(contextExpr, '_W', '_');
+        % Call the function and get diagnostics
+        [contextModel, diagStruct] = processGIMMEContext(model, exprModel, contextExpr, exprThreshold, ...
+            @() biomassReactions(currentModelName), currentModelName);
 
-    fprintf('Processing context: %s\n', contextExpr);
+        %    --- Save ---
+        saveFile = fullfile(outFolder, [contextModel.id '.mat']);
+        writeCbModel(contextModel, 'fileName', saveFile, 'format', 'mat');
+        saveXmlFile = fullfile(outFolder, [contextModel.id '.xml']);
+        writeCbModel(contextModel, 'fileName', saveXmlFile, 'format', 'sbml');
 
-    % --- Load correct constrained model ---
-    constrainedModelFile = fullfile( ...
-        constrainedFolder, ...
-        sprintf('%s_%s_constrained.mat', currentModelName, contextExpr) ...
-    );
-
-    if ~isfile(constrainedModelFile)
-        warning('Model not found: %s', constrainedModelFile);
-        continue
+        % Append diagnostics to array
+        allDiags = [allDiags; diagStruct];  
     end
-
-    model = readCbModel(constrainedModelFile);
-
-    % % --- Inside the context loop, after loading the constrained model ---
-    % % Get the experimental growth rate for this context
-    % condStr = contextExpr; % e.g., 'TempShift_W1'
-    % 
-    % % Split contextExpr into condition and window
-    % tokens = split(condStr,'_');  % {'TempShift','1'}
-    % conditionName = tokens{1};
-    % windowNum     = tokens{2};
-    % 
-    % % Find the matching row in growthTable
-    % idx = strcmp(growthTable.Condition, conditionName) & strcmp(growthTable.Window, windowNum);
-    % 
-    % if any(idx)
-    %     % Calculate lower bound
-    %     expLB = growthTable.avg_growth__(idx) - growthTable.sd_growth__(idx);
-    %     expLB = max(expLB, 0);  % avoid negative lower bound
-    % 
-    %     % Set biomass lower bound
-    %     rxnID = findRxnIDs(model, objectiveRxn);
-    %     model.lb(rxnID) = expLB;
-    % 
-    %     % Display current bounds
-    %     fprintf('Setting biomass %s LB = %.5f, UB = %.1f\n', ...
-    %             objectiveRxn, model.lb(rxnID), model.ub(rxnID));
-    % else
-    %     warning('No experimental growth rate found for %s window %s', conditionName, windowNum);
-    % end
-
-    % --- Display current biomass bounds ---
-    biomassIdx = find(strcmp(model.rxns, objectiveRxn));
-    if ~isempty(biomassIdx)
-        fprintf('Biomass bounds for %s: LB = %.4f, UB = %.4f\n', ...
-            objectiveRxn, model.lb(biomassIdx), model.ub(biomassIdx));
-    else
-        warning('Biomass reaction %s not found in model!', objectiveRxn);
-    end
-
-    % % --- Set threshold for GIMME (90% of experimental growth) ---
-    % exprThreshold = 0.9 * expLB;  % 90% of experimental growth
-
-
-    % --- Extract gene expression ---
-    genes  = exprModel.EntrezID;
-    values = exprModel.(contextExpr);   % original column name
-
-    % --- Ensure proper types ---
-    genes = cellstr(string(genes));   % convert to cell array of chars
-    values = double(values);           % numeric vector
-
-    % --- Create struct for COBRA ---
-    geneExpStruct = struct();          % <-- make sure this is a struct
-    geneExpStruct.gene  = genes;
-    geneExpStruct.value = values;
-
-    % --- Map expression to reactions ---
-    rxnScores = mapExpressionToReactions(model, geneExpStruct);
-
-    % Assign -1 to reactions not mapped to genes
-    rxnScores(isnan(rxnScores)) = -1;
-
-    % --- Run GIMME ---
-    contextModel = GIMME(model, rxnScores, exprThreshold, objectiveRxn);
-    % --- Quick stats ---
-    fprintf('Reactions: original %d, context-specific %d, removed %d\n', ...
-        numel(model.rxns), numel(contextModel.rxns), numel(model.rxns)-numel(contextModel.rxns));
-
-    % --- Set model ID ---
-    contextModel.id = sprintf('%s_%s_GIMME', currentModelName, contextExpr);
-
-    % % --- Save ---
-    % saveFile = fullfile(outFolder, [contextModel.id '.mat']);
-    % writeCbModel(contextModel, 'fileName', saveFile, 'format', 'mat');
-    % 
-    % saveXmlFile = fullfile(outFolder, [contextModel.id '.xml']);
-    % writeCbModel(contextModel, 'fileName', saveXmlFile, 'format', 'sbml');
-
-     end
 end
 
-fprintf('\nAll models and contexts processed.\n');
+% --- Convert to table and save ---
+diagTable = struct2table(allDiags);
+writetable(diagTable, fullfile(outFolder, 'GIMME_diagnostics.csv'));
+fprintf('\nAll diagnostics saved to GIMME_diagnostics.csv\n');
