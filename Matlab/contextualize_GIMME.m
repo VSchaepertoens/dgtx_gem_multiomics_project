@@ -9,7 +9,7 @@ initCobraToolbox(false)   % false = do not update
 %% 2. Project paths
 % Project root
 PROJECT_ROOT = pwd; 
-outFolder = fullfile(PROJECT_ROOT, 'models/contextualized/GIMME');
+outFolder = fullfile(PROJECT_ROOT, 'models/contextualized/GIMME_25perc');
 if ~exist(outFolder, 'dir')
     mkdir(outFolder);
 end
@@ -63,9 +63,50 @@ for i = 1:numel(varNames)
     exprTable.Properties.VariableNames{i} = newName;
 end
 
+%% 5. Compute expression threshold (percentile-based)
+
+% Extract only expression values (exclude EntrezID or other metadata)
+exprValues = exprTable{:, 3:end};  % assumes first column is EntrezID
+exprValues = exprValues(:);
+exprValues = exprValues(~isnan(exprValues) & exprValues > 0);
+
+% Apply log2 transform
+exprValues_log = log2(exprValues + 1);
+
+% Compute percentiles
+p10 = prctile(exprValues_log, 10);
+p25 = prctile(exprValues_log, 25);
+p50 = prctile(exprValues_log, 50);
+
+fprintf('Expression distribution (non-zero values):\n');
+fprintf('  10th percentile: %.4f\n', p10);
+fprintf('  25th percentile: %.4f\n', p25);
+fprintf('  Median: %.4f\n', p50);
+fprintf('  Min: %.4f\n', min(exprValues_log));
+fprintf('  Max: %.4f\n', max(exprValues_log));
+
+% Choose threshold (paper uses 25th percentile)
+threshold = p25;
+
+fprintf('✅ Using threshold: %.4f\n', threshold);
+
+exprValues_log = log2(exprTable{:,3:end} + 1);
+exprValues_log = exprValues_log(:);
+exprValues_log = exprValues_log(~isnan(exprValues_log) & exprValues_log > 0);
+
+fprintf('Fraction below threshold: %.2f%%\n', ...
+    sum(exprValues_log < 4.4705) / length(exprValues_log) * 100);
+
+% Apply log2 transform to entire expression table
+
+exprTable{:, 3:end} = log2(exprTable{:, 3:end} + 1);
+
+fprintf('✅ Expression table converted to log2(TPM+1) scale\n');
+
 %% 5. Define GIMME parameters
 % Threshold for keeping reactions (can be >0 or another value)
-exprThreshold = 1;  
+%exprThreshold = 1; 
+exprThreshold = p25;
 
 
 % %% 6.  Load experimental growth rates ---
@@ -75,7 +116,7 @@ exprThreshold = 1;
 % growthTable.Window    = string(growthTable.Window);
 
 %% 
-function [contextModel, diagStruct] = processGIMMEContext(model, exprModel, contextExpr, exprThreshold, biomassFunc, modelName)
+function [contextModel, diagStruct, rxnScores,  parsedGPR, gene_used] = processGIMMEContext(model, exprModel, contextExpr, exprThreshold, biomassFunc, modelName)
 % PROCESSGIMMECONTEXT Extracts context-specific model using GIMME
 %
 % Inputs:
@@ -103,7 +144,7 @@ function [contextModel, diagStruct] = processGIMMEContext(model, exprModel, cont
     geneExpStruct.value = values;
 
     % --- Map expression to reactions ---
-    [rxnScores, parsedGPR, gene_used] = mapExpressionToReactions(model, geneExpStruct);
+    [rxnScores, parsedGPR, gene_used] = mapExpressionToReactions(model, geneExpStruct, true);
     rxnScores(isnan(rxnScores)) = -1;
 
     % --- Diagnostics ---
@@ -180,13 +221,50 @@ for m = 1:numel(modelNames)
 
         model = readCbModel(constrainedModelFile);
 
+            
+        %--- CHECK ORIGINAL COMPARTMENTS ---
+        %fprintf('Original compartments:\n');
+        
+        % for j = 1:length(model.comps)
+        %     compName = model.comps{j};
+        % 
+        %     if isfield(model, 'metComps') && ~isempty(model.metComps)
+        %         % Indexed format
+        %         compIdx = j;
+        %         metCount = sum(model.metComps == compIdx);
+        %     else
+        %         % Fallback: parse from metabolite IDs
+        %         metCount = sum(endsWith(model.mets, ['_' compName]));
+        %     end
+        % 
+        %     fprintf('  %s: %d metabolites\n', compName, metCount);
+        % end
+
         % Call the function and get diagnostics
-        [contextModel, diagStruct] = processGIMMEContext(model, exprModel, contextExpr, exprThreshold, ...
+        [contextModel, diagStruct, rxnScores, parsedGPR, gene_used] = processGIMMEContext(model, exprModel, contextExpr, exprThreshold, ...
             @() biomassReactions(currentModelName), currentModelName);
 
+        % --- CHECK POST-GIMME COMPARTMENTS ---
+         %       fprintf('POST-GIMME compartments:\n');
+        
+        % for j = 1:length(contextModel.comps)
+        %     compName = contextModel.comps{j};
+        % 
+        %     if isfield(contextModel, 'metComps') && ~isempty(contextModel.metComps)
+        %         % Indexed format
+        %         compIdx = j;
+        %         metCount = sum(contextModel.metComps == compIdx);
+        %     else
+        %         % Fallback: parse from metabolite IDs
+        %         metCount = sum(endsWith(contextModel.mets, ['_' compName]));
+        %     end
+        % 
+        %     fprintf('  %s: %d metabolites\n', compName, metCount);
+        % end
+
         %    --- Save ---
-        saveFile = fullfile(outFolder, [contextModel.id '.mat']);
-        writeCbModel(contextModel, 'fileName', saveFile, 'format', 'mat');
+        % saveFile = fullfile(outFolder, [contextModel.id '.mat']);
+        % writeCbModel(contextModel, 'fileName', saveFile, 'format', 'mat');
         saveXmlFile = fullfile(outFolder, [contextModel.id '.xml']);
         writeCbModel(contextModel, 'fileName', saveXmlFile, 'format', 'sbml');
 
