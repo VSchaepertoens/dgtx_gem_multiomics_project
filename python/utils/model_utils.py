@@ -3,6 +3,7 @@ import cobra
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Tuple, Dict
+import re
 
 def get_models_dir(mode: str = "original", custom_path: Optional[Path] = None) -> Path:
     """
@@ -27,8 +28,12 @@ def get_models_dir(mode: str = "original", custom_path: Optional[Path] = None) -
         MODELS_DIR = BASE_DIR / "models" / "contextualized" / "GIMME"
     elif mode == "mCADRE":
         MODELS_DIR = BASE_DIR / "models" / "contextualized" / "mCADRE"
+    elif mode == "exp_constrained":
+        MODELS_DIR = BASE_DIR / "models" / "exp_constrained"
+    elif mode == "GIMME25perc":
+        MODELS_DIR = BASE_DIR / "models" / "contextualized" / "GIMME_25perc"
     else:
-        raise ValueError(f"Unknown mode '{mode}'. Choose 'original', 'GIMME', or 'mCADRE'.")
+        raise ValueError(f"Unknown mode '{mode}'. Choose 'original', 'GIMME', or 'mCADRE', or 'exp_constrained'.")
 
     return MODELS_DIR
 
@@ -82,3 +87,58 @@ def load_models(models_folder: Optional[Path] = None) -> Tuple[Dict[str, cobra.M
 
     summary_df = pd.DataFrame(summary_data)
     return models, summary_df
+
+
+# %% Section: Model naming utilities
+
+def get_common_model_name(model_name: str) -> str:
+    """
+    Strips suffixes like '_Constant_X', '_Temp. shifted', '_GIMME'
+    to return the original/common model name used in mappings.
+
+    Examples
+    --------
+    iCHO2441_Constant_1      -> iCHO2441
+    iCHO2441_GIMME            -> iCHO2441
+    iCHO2441_Temp. shifted_2 -> iCHO2441
+    """
+    for suffix in ["_Constant", "_Temp. shifted", "_GIMME"]:
+        if suffix in model_name:
+            return model_name.split(suffix)[0]
+    return model_name
+
+# %% Section: Parse condition and window from model name
+def parse_condition_window(model_name: str):
+    """
+    Extract Condition and Window from model name.
+
+    Works for:
+    - iCHOv1_Constant_4_constrained
+    - iCHOv1_Temp. shifted_2_constrained
+    - iCHO3K_..._Constant_1_GIMME
+    - future variants with additional suffixes
+
+    Returns
+    -------
+    (condition: str, window: int)
+    """
+
+    # 🔹 Detect condition
+    if "Constant" in model_name:
+        condition = "Constant"
+    elif "Temp. shifted" in model_name:
+        condition = "Temp. shifted"
+    else:
+        print(f"⚠️ Could not detect condition in {model_name}")
+        return None, None
+
+    # 🔹 Extract window (last integer in string)
+    numbers = re.findall(r'\d+', model_name)
+
+    if not numbers:
+        print(f"⚠️ Could not extract window from {model_name}")
+        return condition, None
+
+    window = int(numbers[-1])
+
+    return condition, window
