@@ -13,7 +13,7 @@ flux_df <- read_csv("analysis/models/exp_constrained/reaction_fluxes_FBA_pFBA.cs
 reactions <- c("HEX1", "PGI", "TALA", "TKT1", "RPE",
                "RPI", "GAUGE-R10221", "PGL", "G6PDH2r",
                "PFK", "FBA", "TPI", "GAPD", "ACYP", "PGCD", "PSERT",
-               "PGK", "DPGM", "DPGASE", "BPGP", "ENO", "PYK", "LDH_D","LDH_L",
+               "PGK", "DPGM", "DPGase", "BPGP", "ENO", "PYK", "LDH_D","LDH_L",
                "ALATA_L", "PYRt2m", "PCm", "CSm", "r2373", "HMR_4777",
                "SUCD1m", "FUMm", "MDHm")
 
@@ -46,7 +46,7 @@ reaction_plots <- lapply(reactions, function(rxn) {
     labs(
       title = rxn,
       x = "Window",
-      y = "pFBA Flux"
+      y = expression(paste("pFBA Flux [mM ", gDCW^{-1}, " ", h^{-1}, "]"))
     ) +
     scale_color_manual(values = color_mapping_condition) +
     theme_bw() +
@@ -70,8 +70,8 @@ for (rxn in names(reaction_plots)) {
   ggsave(
     file.path("figures/models/exp_constrained/reaction_fluxes", paste0(rxn, ".png")),
     reaction_plots[[rxn]],
-    width = 6,
-    height = 4,
+    width = 3,
+    height = 2,
     dpi = 300,
     bg = "white"
   )
@@ -80,8 +80,8 @@ for (rxn in names(reaction_plots)) {
     file.path("figures/models/exp_constrained/reaction_fluxes",
               paste0(rxn, ".pdf")),
     reaction_plots[[rxn]],
-    width = 6,
-    height = 4,
+    width = 3,
+    height = 2,
     device = cairo_pdf
   )
 }
