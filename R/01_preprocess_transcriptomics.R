@@ -1,13 +1,13 @@
 library(tidyverse)
 
 # directory containing the files
-data_dir <- "data/transcriptomics/"
+data_dir <- "data/transcriptomics/FBA_RNA_windows_TPMs"
 
 # list files
 files <- c(
-  "charrun_FBA_RNA3_iCHO1776_V01_20260210_LH.csv",
-  "charrun_FBA_RNA3_iCHO2441_V01_20260210_LH.csv",
-  "charrun_FBA_RNA3_iCHO3K_V01_20260210_LH.csv"
+  "fba_ready_iCHO3K_TPM.csv",
+  "fba_ready_iCHO1776_TPM.csv",
+  "fba_ready_iCHO2441_TPM.csv"
 )
 
 process_file <- function(file) {
@@ -62,7 +62,7 @@ process_file <- function(file) {
 
 expr_combined <- purrr::map_dfr(files, process_file)
 
-write_csv(expr_combined, "data/transcriptomics/charrun_FBA_RNA3_all_V02_20260311_VS.csv")
+write_csv(expr_combined, "data/transcriptomics/FBA_RNA_windows_TPMs/charrun_FBA_RNA3_all_V01_20260717_VS.csv")
 
 #quick qc
 n_distinct(expr_combined$EntrezID)
