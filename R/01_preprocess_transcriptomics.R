@@ -36,8 +36,8 @@ process_file <- function(file) {
     
     mutate(
       condition = case_when(
-        experiment %in% c("E13","E15","E17","E19") ~ "CT",
-        experiment %in% c("E14","E16","E18","E20") ~ "TS"
+        experiment %in% c("E13","E15","E17","E19") ~ "Constant",
+        experiment %in% c("E14","E16","E18","E20") ~ "Temp. shifted"
       )
     ) %>%
     
