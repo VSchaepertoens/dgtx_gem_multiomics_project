@@ -5,7 +5,7 @@
 
 PLOT_FONT_SIZE <- 6
 PANEL_LABEL_SIZE <- 8
-FONT_FAMILY <- "Liberation Sans"
+FONT_FAMILY <- "sans"
 
 LINE_WIDTH <- 0.6
 RIBBON_ALPHA <- 0.25

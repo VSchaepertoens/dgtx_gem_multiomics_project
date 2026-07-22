@@ -10,12 +10,12 @@ from pathlib import Path
 cobra.Configuration().solver = "glpk"
 
 # %% Section 1: Load models
-MODELS_DIR = get_models_dir(mode="GIMME25perc")
+MODELS_DIR = get_models_dir(mode="GIMME_tpm_25perc")
 models, summary_df = load_models(MODELS_DIR)
 
 #%% # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
-SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME_25perc"
+SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME_tpm_25perc"
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 print(f"Analysis will be saved to: {SAVE_FOLDER}")
 
