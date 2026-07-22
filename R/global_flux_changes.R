@@ -1,0 +1,1193 @@
+library(tidyverse)
+library(ComplexHeatmap)
+library(circlize)
+source("R/plotting_utils.R", local = FALSE)
+library(tidytext)
+
+flux_df <- read_csv("analysis/models/exp_constrained/reaction_fluxes_FBA_pFBA.csv")
+flux_threshold <- 1e-9
+
+# Classify reactions based on activity AND direction consistency
+rxn_classes <- flux_df %>%
+  mutate(
+    active = abs(pFBA_Flux) > flux_threshold,
+    direction = case_when(
+      pFBA_Flux > flux_threshold ~ "positive",
+      pFBA_Flux < -flux_threshold ~ "negative",
+      TRUE ~ "inactive"
+    )
+  ) %>%
+  group_by(common_name, Reaction) %>%
+  summarise(
+    n_contexts = n(),
+    n_active = sum(active),
+    n_positive = sum(direction == "positive"),
+    n_negative = sum(direction == "negative"),
+    direction_consistency = case_when(
+      n_active == 0 ~ "Always inactive",
+      n_positive == n_active ~ "Always active (positive only)",
+      n_negative == n_active ~ "Always active (negative only)",
+      n_positive > 0 & n_negative > 0 ~ "Direction switching",
+      TRUE ~ "Context-specific (activity switching)"
+    ),
+    .groups = "drop"
+  )
+
+# Barplot of reaction classes
+class_summary <- rxn_classes %>%
+  count(common_name, direction_consistency) %>%
+  mutate(common_name = recode(
+    common_name,
+    "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+  ),
+  common_name = factor(
+    common_name,
+    levels = c(
+      "iCHOv1",
+      "iCHO2441",
+      "iCHO3K")
+  ))
+
+# Total reactions per model
+totals <- class_summary %>%
+  group_by(common_name) %>%
+  summarise(total_rxns = sum(n), .groups = "drop")
+
+# Calculate percentages relative to ALL reactions
+class_summary <- class_summary %>%
+  left_join(totals, by = "common_name") %>%
+  mutate(percent = 100 * n / total_rxns)
+
+# Extract inactive percentages for labels
+inactive_labels <- class_summary %>%
+  filter(direction_consistency == "Always inactive") %>%
+  mutate(y_pos = 20,label = paste0("Always inactive\n", round(percent, 1), "%"))
+
+
+# Keep only non-inactive classes for plotting
+plot_df <- class_summary %>%
+  filter(direction_consistency != "Always inactive")
+
+# # plot general landscape plots-----------------------
+# cb_palette <- c(
+#   "Always active (positive only)"      = "#009E73",  # bluish green
+#   "Always active (negative only)"   = "#E69F00",  # orange
+#   "Context-specific (direction switching)" = "#CC79A7"  # reddish purple
+# )
+# 
+# # Plot
+# ggplot(plot_df,
+#        aes(x = common_name,
+#            y = percent,
+#            fill = direction_consistency)) +
+#   geom_col(width = 0.8) +
+#   
+#   geom_text(
+#     data = inactive_labels,
+#     aes(
+#       x = common_name,
+#       y = y_pos,
+#       label = label
+#     ),
+#     inherit.aes = FALSE,
+#     size = 2.5
+#   ) +
+#   
+#   labs(
+#     x = NULL,
+#     y = "% of all reactions",
+#     fill = "Activity pattern"
+#   ) +
+#   scale_fill_manual(values = cb_palette) +
+#   theme_bw() +
+#   theme(
+#     # axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+#     text = element_text(size = 7),
+#     strip.text = element_text(face = "bold"),
+#     legend.position = "bottom",
+#     legend.box = "vertical",
+#     
+#     panel.grid.major = element_blank(),
+#     panel.grid.minor = element_blank(),
+#     panel.border = element_blank(),
+#     
+#     axis.line.x = element_line(color = "black"),
+#     axis.line.y = element_line(color = "black"),
+#     
+#     axis.text = element_text(color = "black" ),
+#     axis.title = element_text(color = "black")
+#   ) +
+#   guides(
+#     fill = guide_legend(nrow = 3, byrow = TRUE)
+#   )
+# 
+# ggsave(
+#   filename = "figures/models/exp_constrained/reaction_activity_classes.pdf",
+#   width = 75,
+#   height = 100,
+#   units = "mm"
+# )
+
+pt_to_geom <- function(pt) pt / 2.845
+
+# only filter iCHO3k
+# Keep only iCHO3K and exclude inactive class
+plot_df <- class_summary %>%
+  filter(
+    common_name == "iCHO3K",
+    direction_consistency != "Always inactive"
+  ) %>%
+  mutate(
+    direction_consistency = recode(
+      direction_consistency,
+      "Always active (negative only)" = "Active (negative)",
+      "Always active (positive only)" = "Active (positive)"
+    )
+  )
+# Plot
+ggplot(
+  plot_df,
+  aes(
+    x = direction_consistency,
+    y = percent,
+    group = direction_consistency
+  )
+) +
+  geom_col(
+    fill = "black",
+    width = 0.9
+  ) +
+  geom_text(
+    aes(label = paste0(round(percent, 1), "%")),
+    vjust = -0.3,
+    size = pt_to_geom(6)
+  ) +
+  scale_y_continuous(
+    limits = c(0, 10)
+  ) +
+  labs(
+    x = NULL,
+    y = "% of all reactions"
+  ) +
+  scale_x_discrete(
+    expand = c(0, 0)
+  ) +
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      color = "black"
+    )
+  ) +
+  theme_tidy()
+
+
+ggsave(
+  filename = "figures/models/exp_constrained/reaction_activity_classes_iCHO3K.png",
+  width = 40,
+  height = 60,
+  units = "mm"
+)
+
+
+# Stacked barplot (percent)
+ggplot(class_summary, aes(x = common_name, y = n, fill = direction_consistency)) +
+  geom_col(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = NULL, y = "% reactions", fill = "Activity pattern") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Absolute count barplot
+ggplot(class_summary, aes(x = common_name, y = n, fill = direction_consistency)) +
+  geom_col() +
+  labs(x = NULL, y = "Number of reactions", fill = "Activity pattern") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+# filter only active ------------------------------------------------------
+# Get always-active reactions (positive OR negative, but consistent)
+always_active_rxns <- rxn_classes %>%
+  filter(str_detect(direction_consistency, "^Always active")) %>%
+  pull(Reaction)
+
+# Filter flux data to only these reactions
+active_fluxes <- flux_df %>%
+  filter(Reaction %in% always_active_rxns)
+
+# Parse context information (assuming naming pattern)
+active_fluxes <- active_fluxes %>%
+  mutate(common_name = recode(
+    common_name,
+    "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+  ),
+    context_label = paste(Condition, Window, sep = "_")
+  )
+
+# Split by model and create individual heatmaps
+models <- unique(active_fluxes$common_name)
+
+
+# heatmap_flux_distr ------------------------------------------------------
+
+# Create a list to store heatmaps
+heatmap_list <- list()
+
+# Prepare matrix for heatmap
+# Option A: Absolute flux values
+for(model in models) {
+
+  # Filter and prepare matrix
+  model_fluxes <- active_fluxes %>%
+    filter(common_name == model)
+  
+  flux_matrix <- model_fluxes %>%
+    select(Reaction, context_label, pFBA_Flux) %>%
+    pivot_wider(id_cols = Reaction, names_from = context_label, values_from = pFBA_Flux) %>%
+    column_to_rownames("Reaction") %>%
+    as.matrix()
+  
+  # After creating flux_matrix, add this:
+  # Remove rows with zero variance (identical values across all contexts)
+  row_var <- apply(flux_matrix, 1, var, na.rm = TRUE)
+  flux_matrix <- flux_matrix[row_var > 0 & !is.na(row_var), ]
+  
+  # Also remove any rows with NA/NaN/Inf
+  flux_matrix <- flux_matrix[complete.cases(flux_matrix), ]
+  
+  # Reorder columns: Constant 1-5, then TS 1-5
+  col_order_df <- data.frame(
+    col_name = colnames(flux_matrix),
+    condition = ifelse(str_detect(colnames(flux_matrix), "Constant"), "Constant", "TS"),
+    window = as.numeric(str_extract(colnames(flux_matrix), "\\d+"))
+  ) %>%
+    arrange(condition, window)
+  
+  flux_matrix <- flux_matrix[, col_order_df$col_name]
+  
+  # Column annotation
+  col_ha <- HeatmapAnnotation(
+    Condition = ifelse(str_detect(colnames(flux_matrix), "Constant"), 
+                       "CT", "TS"),
+    Window = as.numeric(str_extract(colnames(flux_matrix), "\\d+")),
+    col = list(
+      Condition = c("CT" = "#E6641E", "TS" = "#4B288C"),
+      Window = c("1" = "#fef0d9", "2" = "#fdcc8a", "3" = "#fc8d59", 
+               "4" = "#d7301f", "5" = "#7f0000")
+    )
+  )
+  
+  # Get number of reactions
+  n_reactions <- nrow(flux_matrix)
+  
+  # Create heatmap with adjusted color scale (use 95th percentile)
+  flux_95 <- quantile(abs(flux_matrix[flux_matrix != 0]), 0.95, na.rm = TRUE)
+  
+  # flux_min <- min(flux_matrix, na.rm = TRUE)
+  # flux_max <- max(flux_matrix, na.rm = TRUE)
+  
+  hm <- Heatmap(flux_matrix,
+                name = "Flux",
+                col = colorRamp2(
+                  c(-flux_95, 0, flux_95),
+                  # c(flux_min, 0, flux_max),
+                  c("#2166ac", "white", "#b2182b")),
+                cluster_rows = TRUE,
+                cluster_columns = FALSE,
+                show_row_names = FALSE,
+                show_column_names = TRUE,
+                row_title = paste(model, "-", n_reactions, "active reactions"),
+                column_title = "Contexts",
+                top_annotation = col_ha,
+                heatmap_legend_param = list(title = "Flux", direction = "vertical")
+  )
+  
+  # Save
+  pdf(paste0("figures/models/exp_constrained/flux_distr_heatmap_", model, ".pdf"), width = 5, height = 4)
+  draw(hm)
+  dev.off()
+}
+
+
+
+# PCA plots ---------------------------------------------------------------
+# Create a list to store PCA results
+pca_results <- list()
+
+for(model in models) {
+  
+  message("Running PCA for: ", model)
+  
+  # Filter model
+  model_flux <- active_fluxes %>%
+    filter(common_name == model)
+  
+  # Build sample x reaction matrix
+  pca_matrix <- model_flux %>%
+    mutate(
+      sample_id = paste(Condition, Window, sep = "_")
+    ) %>%
+    select(
+      sample_id,
+      Condition,
+      Window,
+      Reaction,
+      pFBA_Flux
+    ) %>%
+    pivot_wider(
+      id_cols = c(sample_id, Condition, Window),
+      names_from = Reaction,
+      values_from = pFBA_Flux
+    )
+  
+  # Metadata
+  metadata <- pca_matrix %>%
+    select(sample_id, Condition, Window)
+  
+  # Flux matrix
+  flux_mat <- pca_matrix %>%
+    select(-sample_id, -Condition, -Window) %>%
+    as.matrix()
+  
+  # Remove zero variance reactions
+  reaction_sd <- apply(flux_mat, 2, sd)
+  flux_mat <- flux_mat[, reaction_sd > 0 & !is.na(reaction_sd)]
+  
+  message("Retained reactions: ", ncol(flux_mat))
+  
+  # PCA
+  pca_res <- prcomp(
+    flux_mat,
+    center = TRUE,
+    scale. = TRUE
+  )
+  
+  # Scores
+  pca_df <- as.data.frame(pca_res$x) %>%
+    bind_cols(metadata) %>%
+    mutate(Model = model,
+           Window = as.character(Window))
+  
+  # Variance explained
+  var_exp <- summary(pca_res)$importance[2, ] * 100
+  
+  # Store results
+  pca_results[[model]] <- list(
+    pca_df = pca_df,
+    var_exp = var_exp,
+    pca_res = pca_res
+  )
+}
+
+# Combine all PCA dataframes
+all_pca_df <- bind_rows(lapply(pca_results, function(x) x$pca_df))
+
+# Set the order of models
+all_pca_df <- all_pca_df %>%
+  mutate(Model = factor(Model, levels = c("iCHOv1", "iCHO2441", "iCHO3K")))
+
+# Color mapping for conditions
+color_mapping_condition <- c(
+  "Constant" = "#E6641E",
+  "Temp. shifted" = "#4B288C"
+)
+
+# # Create PCA plot
+p_combined <- ggplot(
+  all_pca_df,
+  aes(x = PC1, y = PC2, color = Condition, shape = Window)
+) +
+  geom_point(size = 3) +
+  scale_color_manual(values = color_mapping_condition) +
+  facet_wrap(~Model, scales = "free") +
+  labs(
+    x = "PC1",
+    y = "PC2"
+  ) +
+  theme_bw() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    axis.text = element_text(color = "black", size = 11),
+    axis.title = element_text(color = "black", size = 11),
+    strip.background = element_rect(fill = "lightgray"),
+    strip.text = element_text(face = "bold", size = 11)
+  )
+
+plot(p_combined)
+
+# Save the plot
+ggsave("figures/models/exp_constrained/pca_combined_models.pdf", p_combined, width = 6.5, height = 3)
+
+# Also create individual plots for each model with variance in titles
+for(model in c("iCHOv1", "iCHO2441", "iCHO3K")) {
+  if(model %in% names(pca_results)) {
+    p_individual <- ggplot(
+      pca_results[[model]]$pca_df,
+      aes(x = PC1, y = PC2, color = Condition, shape = Window)
+    ) +
+      geom_point(size = 3) +
+      scale_color_manual(values = color_mapping_condition) +
+      labs(
+        title = paste0(model, "\n(PC1: ", round(pca_results[[model]]$var_exp[1], 1), "%, PC2: ", round(pca_results[[model]]$var_exp[2], 1), "%)"),
+        x = paste0("PC1 (", round(pca_results[[model]]$var_exp[1], 1), "%)"),
+        y = paste0("PC2 (", round(pca_results[[model]]$var_exp[2], 1), "%)")
+      ) +
+      # theme_bw() +
+      theme_tidy() +
+      theme(
+        legend.position = "bottom",
+        # panel.grid.minor = element_blank(),
+        # axis.text = element_text(color = "black", size = 11),
+        # axis.title = element_text(color = "black", size = 11),
+        # plot.title = element_text(hjust = 0.5, face = "bold", size = 11)
+      ) +
+      guides(
+        color = "none",
+        shape = "none"
+      )
+    
+    # Save individual plot
+    ggsave(paste0("figures/models/exp_constrained/pca_", model, ".pdf"), 
+           p_individual, width = 2, height = 2)
+    
+    plot(p_individual)
+  }
+}
+
+
+# # reaction-levels dynamics ------------------------------------------------
+# For each model, get top reactions by trajectory class
+
+traj_features <- active_fluxes %>%
+  
+  arrange(common_name, Condition, Window) %>%
+  
+  group_by(common_name, Reaction, Condition) %>%
+  
+  summarise(
+    
+    mean_flux =
+      mean(pFBA_Flux),
+    
+    flux_range =
+      max(pFBA_Flux) -
+      min(pFBA_Flux),
+    
+    cumulative_travel =
+      sum(abs(diff(pFBA_Flux))),
+    
+    net_change =
+      last(pFBA_Flux) -
+      first(pFBA_Flux),
+    
+    slope =
+      coef(
+        lm(
+          pFBA_Flux ~ Window
+        )
+      )[2],
+    
+    .groups = "drop"
+    
+  )
+
+traj_features <- traj_features %>% mutate(
+  travel_ratio = cumulative_travel / (abs(net_change) + 1e-9)
+)
+
+# Define thresholds and create trajectory_class
+slope_thresh <- 0.01
+travel_thresh <- quantile(traj_features$cumulative_travel, 0.25, na.rm = TRUE)
+
+traj_features <- traj_features %>%
+  mutate(
+    trajectory_class = case_when(
+      cumulative_travel < travel_thresh ~ "Stable",
+      slope > slope_thresh & travel_ratio < 2 ~ "Increasing",
+      slope < -slope_thresh & travel_ratio < 2 ~ "Decreasing",
+      travel_ratio >= 2 ~ "Transient",
+      TRUE ~ "Other"
+    )
+  )
+
+model_traj_summary <- list()
+
+# for(model in unique(active_fluxes$common_name)) {
+#   
+#   # Get trajectory features for this model
+#   model_traj <- traj_features %>%
+#     filter(common_name == model)
+#   
+#   # For each trajectory class, get top reactions based on relevant metrics
+#   top_reactions <- model_traj %>%
+#     filter(!is.na(trajectory_class)) %>%  # Remove NA classes
+#     group_by(trajectory_class) %>%
+#     mutate(
+#       # Define ranking criteria based on class
+#       rank_metric = case_when(
+#         trajectory_class == "Stable" ~ -cumulative_travel,  # Most stable (lowest travel)
+#         trajectory_class == "Increasing" ~ slope,           # Steepest increase
+#         trajectory_class == "Decreasing" ~ -slope,          # Steepest decrease  
+#         trajectory_class == "Transient" ~ travel_ratio,     # Most transient
+#         TRUE ~ cumulative_travel
+#       )
+#     ) %>%
+#     arrange(trajectory_class, desc(rank_metric)) %>%
+#     # Take up to 5 per class (or whatever is available)
+#     slice_head(n = 5) %>%  # Changed from 10 to 5
+#     ungroup() %>%
+#     distinct(Reaction, trajectory_class, .keep_all = TRUE)  # Ensure unique reactions
+#   
+#   model_traj_summary[[model]] <- top_reactions
+#   
+#   # Get flux data for these top reactions
+#   top_flux_data <- active_fluxes %>%
+#     filter(common_name == model,
+#            Reaction %in% top_reactions$Reaction) %>%
+#     left_join(top_reactions %>% select(Reaction, trajectory_class, rank_metric), 
+#               by = "Reaction",
+#               relationship = "many-to-many")
+#   
+#   # Print summary for this model
+#   cat("\n", paste(rep("=", 60), collapse = ""), "\n")
+#   cat("MODEL:", model, "\n")
+#   cat(paste(rep("=", 60), collapse = ""), "\n")
+#   
+#   class_counts <- top_reactions %>%
+#     count(trajectory_class)
+#   
+#   for(i in 1:nrow(class_counts)) {
+#     cat("\n", class_counts$trajectory_class[i], ":", 
+#         class_counts$n[i], "reactions\n")
+#   }
+#   
+#   # Create plots for this model
+#   if(nrow(top_flux_data) > 0) {
+#     
+#     # Calculate reasonable height (max 20 inches, min 8)
+#     n_unique_reactions <- length(unique(top_flux_data$Reaction))
+#     plot_height <- min(20, max(8, n_unique_reactions / 2.5))  # Adjusted for fewer reactions
+#     
+#     # Plot 1: All top reactions faceted
+#     p1 <- ggplot(top_flux_data, 
+#                  aes(x = as.numeric(Window), 
+#                      y = pFBA_Flux, 
+#                      color = Condition,
+#                      group = Condition)) +
+#       geom_line(linewidth = 1) +
+#       geom_point(size = 2) +
+#       scale_color_manual(values = color_mapping_condition) +
+#       facet_grid(Reaction ~ trajectory_class, 
+#                  scales = "free_y",
+#                  space = "free_y") +
+#       labs(
+#         title = paste(model, "- Top 5 Reactions per Trajectory Class"),
+#         x = "Time Window",
+#         y = "Flux Value",
+#         color = "Condition"
+#       ) +
+#       theme_bw() +
+#       theme(
+#         strip.background.y = element_rect(fill = "lightblue"),
+#         strip.text.y = element_text(face = "bold", size = 7),
+#         strip.background.x = element_rect(fill = "lightgray"),
+#         strip.text.x = element_text(face = "bold", size = 9),
+#         axis.text = element_text(color = "black", size = 7),
+#         axis.title = element_text(color = "black", size = 10),
+#         plot.title = element_text(hjust = 0.5, face = "bold", size = 11),
+#         legend.position = "bottom",
+#         panel.grid.minor = element_blank()
+#       ) +
+#       scale_x_continuous(breaks = 1:5)
+#     
+#     # Save
+#     ggsave(paste0("figures/models/exp_constrained/trajectories/top5_trajectories_", model, ".pdf"),
+#            p1, width = 14, height = plot_height, limitsize = FALSE)
+#     
+#     # Plot 2: Separate plot for each trajectory class
+#     for(class_type in unique(top_flux_data$trajectory_class)) {
+#       
+#       class_data <- top_flux_data %>%
+#         filter(trajectory_class == class_type)
+#       
+#       if(nrow(class_data) > 0) {
+#         n_reactions_class <- length(unique(class_data$Reaction))
+#         class_height <- min(15, max(5, ceiling(n_reactions_class/2) * 2))
+#         
+#         p2 <- ggplot(class_data, 
+#                      aes(x = as.numeric(Window), 
+#                          y = pFBA_Flux, 
+#                          color = Condition,
+#                          group = Condition)) +
+#           geom_line(linewidth = 1) +
+#           geom_point(size = 2.5) +
+#           scale_color_manual(values = color_mapping_condition) +
+#           facet_wrap(~Reaction, 
+#                      scales = "free_y",
+#                      ncol = 2) +
+#           labs(
+#             title = paste(model, "-", class_type, "Reactions"),
+#             subtitle = paste("Top", n_reactions_class, "reactions"),
+#             x = "Time Window",
+#             y = "Flux Value",
+#             color = "Condition"
+#           ) +
+#           theme_bw() +
+#           theme(
+#             strip.background = element_rect(fill = "lightgray"),
+#             strip.text = element_text(face = "bold", size = 8),
+#             axis.text = element_text(color = "black", size = 8),
+#             axis.title = element_text(color = "black", size = 10),
+#             plot.title = element_text(hjust = 0.5, face = "bold"),
+#             plot.subtitle = element_text(hjust = 0.5),
+#             legend.position = "bottom"
+#           ) +
+#           scale_x_continuous(breaks = 1:5)
+#         
+#         # Save
+#         ggsave(paste0("figures/models/exp_constrained/trajectories/top5_", class_type, "_", model, ".pdf"),
+#                p2, width = 10, height = class_height, limitsize = FALSE)
+#         
+#         print(p2)
+#       }
+#     }
+#     
+#     print(p1)
+#   } else {
+#     cat("\nNo top reactions found for model:", model, "\n")
+#   }
+# }
+
+# # Create a combined summary table (using top 5 from your loop)
+# combined_summary <- bind_rows(model_traj_summary) %>%
+#   select(common_name, Reaction, trajectory_class, 
+#          slope, cumulative_travel, travel_ratio, net_change, flux_range, rank_metric) %>%
+#   arrange(common_name, trajectory_class, desc(rank_metric))
+# 
+# # Print the combined summary
+# cat("COMBINED SUMMARY: Top 5 Reactions Across All Models\n")
+# print(combined_summary)
+
+# Save the summary table
+#write_csv(combined_summary, "figures/top5_trajectories_summary.csv")
+
+# # Optional: Create slope bar plots for the top reactions
+# for(model in names(model_traj_summary)) {
+#   
+#   top_reactions <- model_traj_summary[[model]]
+#   
+#   if(nrow(top_reactions) > 0) {
+#     # Create unique labels for reactions by adding trajectory class
+#     top_reactions_for_plot <- top_reactions %>%
+#       mutate(Reaction_label = paste0(Reaction, " (", trajectory_class, ")"))
+#     
+#     # Simple bar plot of slopes by class
+#     p_slopes <- ggplot(top_reactions_for_plot, 
+#                        aes(x = reorder(Reaction_label, slope), 
+#                            y = slope, 
+#                            fill = trajectory_class)) +
+#       geom_col() +
+#       coord_flip() +
+#       labs(
+#         title = paste(model, "- Slope Values for Top 5 Reactions"),
+#         x = "Reaction",
+#         y = "Slope (flux units per window)", #Temporal trend (Δflux/window) OR Linear trend (flux/window)
+#         fill = "Trajectory Class",
+#         subtitle = "Positive = increasing over time; Negative = decreasing over time; Calculated separately for Constant (orange) and TS (purple)"
+#       ) +
+#       theme_bw() +
+#       theme(
+#         axis.text.y = element_text(size = 6),
+#         legend.position = "bottom"
+#       ) +
+#       geom_hline(yintercept = 0, linetype = "dashed", color = "gray50")
+#     
+#     # Create directory if it doesn't exist
+#     if(!dir.exists("figures/models/exp_constrained")) {
+#       dir.create("figures/models/exp_constrained", recursive = TRUE)
+#     }
+#     
+#     ggsave(paste0("figures/models/exp_constrained/top5_slopes_", model, ".pdf"),
+#            p_slopes, width = 10, height = 8, limitsize = FALSE)
+#   }
+# }
+# ============================================================
+# ADD NEW CLASSIFICATIONS FOR STABLE REACTIONS
+# ============================================================
+
+# Calculate stability metrics from the original flux data
+stability_classification <- active_fluxes %>%
+  group_by(common_name, Reaction, Condition) %>%
+  summarise(
+    # Check if flux is constant across windows within each condition
+    flux_range_within_condition = max(pFBA_Flux) - min(pFBA_Flux),
+    is_constant_within_condition = flux_range_within_condition < 1e-6,  # Threshold for constant
+    .groups = "drop"
+  ) %>%
+  group_by(common_name, Reaction) %>%
+  summarise(
+    # Check if constant across conditions (comparing Constant vs TS at same window)
+    # AND constant across windows
+    constant_across_windows_and_conditions = all(is_constant_within_condition),
+    constant_across_windows_only = any(is_constant_within_condition) & !all(is_constant_within_condition),
+    .groups = "drop"
+  )
+
+# Join back to traj_features
+traj_features <- traj_features %>%
+  left_join(stability_classification, by = c("common_name", "Reaction"))
+
+# Update trajectory_class with new categories
+traj_features <- traj_features %>%
+  mutate(
+    trajectory_class = case_when(
+      # New: Constant across everything
+      constant_across_windows_and_conditions ~ "Stable (no change)",
+      # New: Constant within each condition but differs between conditions
+      constant_across_windows_only ~ "Stable within conditions",
+      # Original classifications
+      cumulative_travel < travel_thresh ~ "Stable",
+      slope > slope_thresh & travel_ratio < 2 ~ "Increasing",
+      slope < -slope_thresh & travel_ratio < 2 ~ "Decreasing",
+      travel_ratio >= 2 ~ "Transient",
+      TRUE ~ "Other"
+    )
+  )
+
+# Add a separate stability type column
+traj_features <- traj_features %>%
+  mutate(
+    stability_type = case_when(
+      constant_across_windows_and_conditions ~ "Stable (no change across windows or conditions)",
+      constant_across_windows_only ~ "Stable within conditions (differs between CT/TS)",
+      TRUE ~ "Variable"
+    )
+  )
+
+
+traj_features %>%
+  count(common_name, trajectory_class) %>%
+  arrange(common_name, trajectory_class) %>%
+  print()
+# 
+# # Create summary plots for the new classifications
+# p_stability <- ggplot(traj_features, 
+#                       aes(x = common_name, fill = stability_type)) +
+#   geom_bar(position = "fill") +
+#   scale_fill_manual(
+#     values = c(
+#       "Stable (no change across windows or conditions)" = "#A6D854",  # pastel green
+#       "Stable within conditions (differs between CT/TS)" = "#8DA0CB", # pastel blue
+#       "Variable" = "#FC8D62"                                          # pastel orange
+#     )
+#   ) +
+#   scale_y_continuous(labels = scales::percent) +
+#   labs(
+#     title = "Reaction Stability Patterns",
+#     x = NULL,
+#     y = "% of active reactions",
+#     fill = "Stability Pattern"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     axis.text.x = element_text(angle = 45, hjust = 1),
+#     legend.position = "bottom",
+#     legend.direction = "vertical"
+#   )
+# 
+# plot(p_stability)
+# 
+# ggsave("figures/models/exp_constrained/reaction_stability_patterns.pdf", p_stability, width = 8, height = 6)
+
+traj_class_summary <- traj_features %>%
+  mutate(
+    # common_name = recode(
+    #   common_name,
+    #   "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+    # ),
+    common_name = factor(
+      common_name,
+      levels = c(
+        "iCHOv1",
+        "iCHO2441",
+        "iCHO3K"
+      )
+    ),
+    trajectory_class = factor(
+      trajectory_class,
+      levels = c(
+        "Stable (no change)",
+        "Stable within conditions",
+        "Increasing",
+        "Decreasing",
+        "Transient",
+        "Other"
+      )
+    )
+  ) %>%
+  count(common_name, trajectory_class)
+
+# p_traj_classes <- ggplot(
+#   traj_class_summary,
+#   aes(
+#     x = common_name,
+#     y = n,
+#     fill = trajectory_class
+#   )
+# ) +
+#   geom_col(position = "fill") +
+#   scale_y_continuous(
+#     labels = scales::percent
+#   ) +
+#   scale_fill_manual(
+#     values = c(
+#       "Stable (no change)" = "#009E73",
+#       "Stable within conditions" = "#56B4E9",
+#       "Increasing" = "#E69F00",
+#       "Decreasing" = "#D55E00",
+#       "Transient" = "#CC79A7",
+#       "Other" = "grey80"
+#     )
+#   ) +
+#   labs(
+#     x = NULL,
+#     y = "% reactions",
+#     fill = "Trajectory class"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     axis.text = element_text(
+#       color = "black"
+#     ),
+#     axis.title = element_text(
+#       color = "black"
+#     ),
+#     legend.position = "right"
+#   )
+#  plot(p_traj_classes)
+# ggsave(
+#   "figures/models/exp_constrained/trajectory_classes.pdf",
+#   p_traj_classes,
+#   width = 6,
+#   height = 4
+# )
+
+#only iCHO3k
+
+traj_class_summary_iCHO3K <- traj_class_summary %>%
+  filter(common_name == "iCHO3K")
+
+p_traj_classes <- ggplot(
+  traj_class_summary_iCHO3K,
+  aes(
+    x = trajectory_class,
+    y = n
+  )
+) +
+  geom_col(fill = "black", width = 0.9) +
+  geom_text(
+    aes(label = n),
+    vjust = -0.3,
+    size = pt_to_geom(6)
+  ) +
+  labs(
+    x = NULL,
+    y = "Number of reactions"
+  ) +
+  scale_y_continuous(limits = c(0, 1100)) +
+  
+  theme_bw() +
+  theme_tidy() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, color = "black"),
+    # axis.text = element_text(color = "black"),
+    # axis.title = element_text(color = "black"),
+    # legend.position = "none"
+  )
+
+plot(p_traj_classes)
+
+ggsave(
+  filename = "figures/models/exp_constrained/trajectory_classes_iCHO3K.png",
+  width = 80,
+  height = 60,
+  units = "mm"
+)
+
+
+# # Create a detailed summary of constant reactions
+# constant_reactions_summary <- traj_features %>%
+#   filter(stability_type != "Variable") %>%
+#   select(common_name, Reaction, stability_type, trajectory_class,
+#          slope, cumulative_travel, travel_ratio, 
+#          mean_flux, flux_range) %>%
+#   arrange(common_name, stability_type, Reaction)
+# 
+# cat("STABLE REACTION SUMMARY\n")
+# print(constant_reactions_summary)
+# 
+# # Save to CSV
+# #write_csv(constant_reactions_summary, "figures/constant_reactions_summary.csv")
+# 
+# # Visualize constant reactions across models
+# p_constant_heatmap <- traj_features %>%
+#   filter(stability_type != "Variable") %>%
+#   group_by(common_name, stability_type) %>%
+#   summarise(count = n(), .groups = "drop") %>%
+#   ggplot(aes(x = common_name, y = stability_type, fill = count)) +
+#   geom_tile() +
+#   geom_text(aes(label = count), color = "white", fontface = "bold") +
+#   scale_fill_gradient(low = "lightblue", high = "darkblue") +
+#   labs(
+#     title = "Number of Stable Reactions per Model",
+#     x = NULL,
+#     y = NULL,
+#     fill = "Count"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     axis.text.x = element_text(angle = 45, hjust = 1),
+#     panel.grid = element_blank()
+#   )
+# plot(p_constant_heatmap)
+# ggsave("figures/models/exp_constrained/constant_reactions_heatmap.pdf", p_constant_heatmap, width = 6, height = 4)
+# 
+# # condition differences delta flux ----------------------------------------
+# delta_flux <- active_fluxes %>%
+#   select(
+#     common_name,
+#     Reaction,
+#     Window,
+#     Condition,
+#     pFBA_Flux
+#   ) %>%
+#   pivot_wider(
+#     names_from = Condition,
+#     values_from = pFBA_Flux
+#   ) %>%
+#   mutate(
+#     delta_flux =
+#       `Temp. shifted` - Constant,
+#     
+#     relative_delta =
+#       delta_flux /
+#       pmax(
+#         abs(`Temp. shifted`),
+#         abs(Constant),
+#         1e-9
+#       )
+#   )
+# 
+# delta_summary <- delta_flux %>%
+#   group_by(
+#     common_name,
+#     Reaction
+#   ) %>%
+#   summarise(
+#     
+#     mean_delta =
+#       mean(delta_flux),
+#     
+#     max_delta =
+#       max(abs(delta_flux)),
+#     
+#     cumulative_delta =
+#       sum(abs(delta_flux)),
+#     
+#     mean_relative_delta =
+#       mean(abs(relative_delta)),
+#     
+#     .groups = "drop"
+#     
+#   )
+# 
+# # Combine cumulative delta and mean delta
+# delta_analysis <- delta_summary %>%
+#   mutate(
+#     # Classify by condition bias
+#     condition_bias = case_when(
+#       mean_delta > 0 ~ "Higher in TS",
+#       mean_delta < 0 ~ "Higher in CT",
+#       TRUE ~ "Similar"
+#     ),
+#     # Classify by effect magnitude (using cumulative delta)
+#     effect_magnitude = case_when(
+#       cumulative_delta > quantile(cumulative_delta, 0.75) ~ "Large",
+#       cumulative_delta > quantile(cumulative_delta, 0.5) ~ "Medium",
+#       TRUE ~ "Small"
+#     ),
+#     # Combined classification
+#     combined_class = paste(effect_magnitude, condition_bias)
+#   ) %>%
+#   mutate(
+#     common_name = factor(
+#       common_name,
+#       levels = c(
+#         "iCHOv1",
+#         "iCHO2441",
+#         "iCHO3K"
+#       ))
+#   )
+# 
+# # Plot 1: Scatter plot - cumulative delta vs mean delta
+# p_scatter <- ggplot(delta_analysis, 
+#                     aes(x = mean_delta, 
+#                         y = cumulative_delta, 
+#                         color = condition_bias
+#                         # alpha = effect_magnitude
+#                         )) +
+#   geom_point(size = 2) +
+#   geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+#   scale_color_manual(values = c("Higher in TS" = "#4B288C", 
+#                                 "Higher in CT" = "#E6641E", 
+#                                 "Similar" = "gray")) +
+#   # scale_alpha_manual(values = c("Large" = 1, "Medium" = 0.7, "Small" = 0.3)) +
+#   facet_wrap(~common_name, scales = "free") +
+#   labs(
+#     title = "Condition Effects: Magnitude vs Direction",
+#     x = "Mean Delta (TS - CT) → Positive = Higher in TS",
+#     y = "Cumulative |Delta| (Total Condition Effect)",
+#     color = "Direction"
+#     # alpha = "Magnitude"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     legend.position = "bottom",
+#     panel.grid.minor = element_blank(),
+#     strip.background = element_rect(fill = "lightgray"),
+#     strip.text = element_text(face = "bold")
+#   )
+# 
+# print(p_scatter)
+# ggsave("figures/models/exp_constrained/delta_scatter_cumulative_vs_mean.pdf", 
+#        p_scatter, 
+#        width = 6, 
+#        height = 4)
+# 
+# 
+# top20_by_cumulative <- delta_analysis %>%
+#   group_by(common_name) %>%
+#   slice_max(cumulative_delta, n = 30) %>%
+#   ungroup() %>%
+#   # reorder_within creates factor that orders within each group
+#   mutate(Reaction = reorder_within(Reaction, cumulative_delta, common_name))
+# 
+# p_top20 <- ggplot(top20_by_cumulative, 
+#                   aes(x = Reaction, 
+#                       y = cumulative_delta, 
+#                       fill = condition_bias)) +
+#   geom_col() +
+#   coord_flip() +
+#   facet_wrap(~common_name, scales = "free_y") +
+#   scale_x_reordered() +  # This cleans up the axis labels
+#   scale_fill_manual(values = c("Higher in TS" = "#4B288C", 
+#                                "Higher in CT" = "#E6641E", 
+#                                "Similar" = "gray")) +
+#   labs(
+#     title = "Top 30 Reactions by Cumulative Condition Effect",
+#     x = "Reaction",
+#     y = "Cumulative |Delta| (sum of |TS - CT| across windows)",
+#     fill = "Direction"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     legend.position = "bottom",
+#     axis.text.y = element_text(size = 7),
+#     strip.background = element_rect(fill = "lightgray"),
+#     strip.text = element_text(face = "bold")
+#   )
+# 
+# print(p_top20)
+# ggsave("figures/models/exp_constrained/delta_top30_cumulative.pdf", p_top20, width = 6, height = 5)
+# 
+# # # Plot 3: Binned summary - how many reactions fall into each quadrant?
+# # delta_analysis %>%
+# #   mutate(
+# #     direction_binned = case_when(
+# #       mean_delta > 1 ~ "Strongly higher in TS",
+# #       mean_delta > 0 ~ "Slightly higher in TS",
+# #       mean_delta > -1 ~ "Similar",
+# #       mean_delta > -5 ~ "Slightly higher in CT",
+# #       TRUE ~ "Strongly higher in CT"
+# #     ),
+# #     magnitude_binned = case_when(
+# #       cumulative_delta > quantile(cumulative_delta, 0.9) ~ "Top 10%",
+# #       cumulative_delta > quantile(cumulative_delta, 0.75) ~ "Top 25%",
+# #       cumulative_delta > quantile(cumulative_delta, 0.5) ~ "Top 50%",
+# #       TRUE ~ "Bottom 50%"
+# #     )
+# #   ) %>%
+# #   count(common_name, direction_binned, magnitude_binned) %>%
+# #   ggplot(aes(x = direction_binned, y = n, fill = magnitude_binned)) +
+# #   geom_col(position = "dodge") +
+# #   facet_wrap(~common_name) +
+# #   coord_flip() +
+# #   labs(
+# #     title = "Distribution of Condition Effects",
+# #     x = "Direction (TS vs CT)",
+# #     y = "Number of Reactions",
+# #     fill = "Effect Magnitude"
+# #   ) +
+# #   theme_bw() +
+# #   theme(legend.position = "bottom") +
+# #   scale_fill_brewer(palette = "Blues")
+# # 
+# # ggsave("figures/delta_distribution_summary.pdf", width = 10, height = 6)
+# 
+# # Plot 4: Heatmap of top reactions by BOTH cumulative and mean delta
+# # Select reactions that are high in cumulative delta AND have strong direction
+# top_strong_effects <- delta_analysis %>%
+#   group_by(common_name) %>%
+#   filter(
+#     cumulative_delta > quantile(cumulative_delta, 0.75),
+#     abs(mean_delta) > quantile(abs(mean_delta), 0.75)
+#   ) %>%
+#   slice_max(abs(mean_delta), n = 15)
+# 
+# # Get the delta_flux data for these reactions
+# heatmap_strong <- delta_flux %>%
+#   semi_join(top_strong_effects, by = c("common_name", "Reaction")) %>%
+#   mutate(Reaction_label = paste0(Reaction, " (", 
+#                                  ifelse(mean(delta_flux) > 0, "↑TS", "↑CT"), 
+#                                  ")"))
+# 
+# ggplot(heatmap_strong, 
+#        aes(x = Window, y = reorder(Reaction_label, delta_flux), fill = delta_flux)) +
+#   geom_tile() +
+#   facet_grid(common_name ~ ., scales = "free_y", space = "free_y") +
+#   scale_fill_gradient2(low = "blue", mid = "white", high = "red", 
+#                        midpoint = 0,
+#                        name = "ΔFlux\n(TS - CT)") +
+#   labs(
+#     title = "Reactions with Strong Condition Effects (High Magnitude & Clear Direction)",
+#     x = "Time Window",
+#     y = "Reaction"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     axis.text.y = element_text(size = 7),
+#     strip.background = element_rect(fill = "lightgray"),
+#     strip.text = element_text(face = "bold")
+#   )
+# 
+# ggsave("figures/delta_strong_effects_heatmap.pdf", width = 10, height = 12)
+# 
+# # Print summary statistics
+# cat("CONDITION EFFECT SUMMARY\n")
+# 
+# delta_analysis %>%
+#   group_by(common_name) %>%
+#   summarise(
+#     total_reactions = n(),
+#     higher_in_TS = sum(mean_delta > 0),
+#     higher_in_CT = sum(mean_delta < 0),
+#     pct_higher_TS = round(100 * higher_in_TS / total_reactions, 1),
+#     pct_higher_CT = round(100 * higher_in_CT / total_reactions, 1),
+#     mean_cumulative_delta = round(mean(cumulative_delta), 2),
+#     max_cumulative_delta = round(max(cumulative_delta), 2),
+#     .groups = "drop"
+#   ) %>%
+#   print()
