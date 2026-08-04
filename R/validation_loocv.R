@@ -364,7 +364,7 @@ r2_summary <- r2_long %>%
 r2_summary
 
 # Save r2_summary as CSV 
-write_csv( r2_summary, "analysis/models/GIMME_tpm_25perc/r2_summary.csv" )
+write_csv( r2_summary, paste0("analysis/models/",model_type,"/r2_summary.csv") )
 
 #MAE plot ---------------------------------------
 mae_long <- r2_by_rxn %>%
