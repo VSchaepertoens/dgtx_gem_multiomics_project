@@ -32,11 +32,10 @@ measured_mapped %>%
   filter(is.na(reaction_id)) %>%
   distinct(label)
 
-
+model_type <- "exp_constrained" #or GIMME_tpm_25perc or GIMME_25perc or exp_constrained
 
 #load predicted fluxes
-# predicted <- read_csv("analysis/models/GIMME_25perc/reaction_fluxes_CV_ONLY_GIMME25perc.csv")
-predicted <- read_csv("analysis/models/exp_constrained/reaction_fluxes_CV_ONLY_exp_constrained.csv")
+predicted <- read_csv(paste0("analysis/models/",model_type, "/reaction_fluxes_CV_ONLY_exp_constrained.csv"))
 
 head(predicted)
 
@@ -44,8 +43,6 @@ head(predicted)
 predicted_clean <- predicted %>%
   filter(!Reaction %in% c("DM_igg[g]", "DM_igg_g")) %>%
   rename(reaction_id = Reaction)
-
-
 
 #join measured with predicted
 df <- predicted_clean %>%
@@ -70,7 +67,7 @@ df %>%
     missing_measured = sum(is.na(measured_flux)),
     total = n()
   )
-#R2 for a given FBA/pFBA flux
+#R2 and MAE for a given FBA/pFBA flux
 
 r2_by_rxn <- df %>%
   group_by(reaction_id, common_name, Condition) %>%
@@ -78,6 +75,15 @@ r2_by_rxn <- df %>%
     r2_pFBA = cor(measured_flux, predicted_pFBA_flux, use = "complete.obs")^2,
     r2_FBA = cor(measured_flux, predicted_FBA_flux, use = "complete.obs")^2,
     n = n(),
+    # MAE
+    MAE_FBA = mean(
+      abs(measured_flux - predicted_FBA_flux),
+      na.rm = TRUE
+    ),
+    MAE_pFBA = mean(
+      abs(measured_flux - predicted_pFBA_flux),
+      na.rm = TRUE
+    ),
     .groups = "drop"
   ) %>%
 mutate(common_name = recode(
@@ -93,6 +99,22 @@ mutate(common_name = recode(
        ))
 
 
+# checking Asp NA ---------------------------------------------------------
+predicted_ASP <- predicted_clean %>% filter(reaction_id == "EX_asp_L_e") 
+# View(predicted_ASP)
+
+ASP_r2 <- predicted_ASP %>%
+  group_by(common_name, Condition) %>%
+  summarize(
+    r2_pFBA = cor(measured_flux, pFBA_Flux, use = "complete.obs")^2,
+    r2_FBA = cor(measured_flux, FBA_Flux, use = "complete.obs")^2,
+    n = n(),
+    .groups = "drop"
+  )
+
+#For this model  ASP pFBA is always 0 → the correlation-based R² is undefined.
+
+# plotting-------------------------------------------------------
 #plot experimental vs predicted, facet by reaction id, add R2 text
 color_mapping_condition <- c(
   "Constant" = "#E6641E",
@@ -107,62 +129,6 @@ shape_mapping_window <- c(
   "5" = 8
 )
 
-# # only ichov1
-# r2_plot <- r2_by_rxn %>%
-#   filter(common_name == "iCHO2441") %>%
-#   select(reaction_id, common_name, r2_pFBA)
-# 
-# df_plot <- df %>%
-#   filter(common_name == "iCHO2441") %>%
-#   left_join(r2_plot, by = c("reaction_id", "common_name"))
-
-
-# ggplot(df_plot, aes(x = measured_flux, y = predicted_pFBA_flux)) +
-#   geom_point(aes(color = Condition, shape = Window), 
-#              size = 2.5, alpha = 0.8) +
-#   geom_abline(slope = 1, intercept = 0, 
-#               linetype = "dashed", color = "grey40") +
-#   facet_wrap(~reaction_id, scales = "free") +
-#   scale_color_manual(values = color_mapping_condition) +
-#   
-#   geom_text(
-#     data = df_plot %>% distinct(reaction_id, r2_pFBA),
-#     aes(label = paste0("R² = ", sprintf("%.2f", r2_pFBA))),
-#     x = -Inf, y = Inf,
-#     hjust = -0.1, vjust = 1.2,
-#     size = 3.2,
-#     inherit.aes = FALSE
-#   ) +
-#   
-#   labs(
-#     x = "Measured flux",
-#     y = "Predicted flux (pFBA)",
-#     color = "Condition",
-#     shape = "Window"
-#   ) +
-#   
-#   theme_minimal(base_size = 12) +
-#   theme(
-#     legend.position = "bottom",
-#     strip.text = element_text(face = "bold"),
-#     panel.grid.minor = element_blank(),
-#     panel.spacing = unit(1, "lines")
-#   )
-
-# # barplot for the R2 only
-# ggplot(r2_plot, aes(x = reorder(reaction_id, -r2_pFBA), y = r2_pFBA)) +
-#   geom_col(fill = "steelblue") +
-#   
-#   labs(
-#     x = "Reaction",
-#     y = expression(R^2)
-#   ) +
-#   
-#   theme_minimal(base_size = 12) +
-#   theme(
-#     axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-#     panel.grid.minor = element_blank()
-#   )
 
 r2_long <- r2_by_rxn %>%
   pivot_longer(
@@ -256,6 +222,7 @@ ggsave("figures/models/exp_constrained/R2_by_reaction_barplot.png",
        units = "mm",
        dpi = 300)
 
+#R2 as barplots ---------------------------------------------
 ggplot(r2_long, aes(x = method, y = R2)) +
   # Boxplot for all data (ignoring Condition)
   geom_boxplot(alpha = 0.2, outlier.shape = NA, 
@@ -273,11 +240,261 @@ ggplot(r2_long, aes(x = method, y = R2)) +
   theme_tidy() +
   theme(axis.text.x = element_text(angle = 90))
 
-ggsave("figures/models/exp_constrained/R2_distribution_boxplot_condition.png",
+ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_boxplot_condition.png",
        width = 50,
        height = 35,
        units = "mm",
        dpi = 300)
+
+#R2 as barplots Larissa theme ---------------------------------------------
+
+# Bar plot settings
+PLOT_FONT_SIZE  <- 6
+PANEL_LABEL_SIZE <- 8
+FONT_FAMILY     <- "Liberation Sans"
+
+BAR_ALPHA       <- 0.25
+ERRORBAR_ALPHA  <- 0.8
+POINT_ALPHA     <- 0.6
+
+POINT_SIZE      <- 1
+LINE_WIDTH      <- 0.6
+
+# Mean ± standard deviation
+mean_sd <- function(x) {
+  data.frame(
+    y = mean(x, na.rm = TRUE),
+    ymin = mean(x, na.rm = TRUE) - sd(x, na.rm = TRUE),
+    ymax = mean(x, na.rm = TRUE) + sd(x, na.rm = TRUE)
+  )
+}
+
+# Dodge settings
+DODGE_WIDTH <- 0.9
+
+ggplot(
+  r2_long,
+  aes(
+    x = common_name,
+    y = R2,
+    fill = Condition,
+    color = Condition
+  )
+) +
+  
+  # Individual observations, jittered within each Condition
+  geom_point(
+    aes(fill = Condition, color = Condition),
+    alpha = POINT_ALPHA,
+    size = POINT_SIZE,
+    shape = 21,
+    stroke = 0.5,
+    position = position_jitterdodge(
+      jitter.width = 0.1,
+      dodge.width = DODGE_WIDTH
+    ),
+    show.legend = FALSE,
+    na.rm = TRUE
+  ) +
+  
+  # Boxplots, side-by-side by Condition 
+  geom_boxplot( alpha = BAR_ALPHA, 
+                outlier.shape = NA, 
+                width = 0.7, 
+                position = position_dodge(width = DODGE_WIDTH), 
+                na.rm = TRUE ) +
+  
+  labs(
+    x = "",
+    y = bquote("Exchange rate" ~ R^2)
+  ) +
+  facet_wrap( ~method) +
+  
+  scale_fill_manual(values = color_condition_long) +
+  scale_color_manual(values = color_condition_long) +
+  
+  theme_bw(
+    base_size = PLOT_FONT_SIZE,
+    base_family = FONT_FAMILY
+  ) +
+  
+  theme_tidy() +
+  
+  theme(
+    strip.text = element_text(size = PANEL_LABEL_SIZE),
+    axis.title = element_text(size = PLOT_FONT_SIZE),
+    axis.text = element_text(size = PLOT_FONT_SIZE),
+    legend.title = element_text(size = PLOT_FONT_SIZE),
+    legend.text = element_text(size = PLOT_FONT_SIZE),
+    axis.text.x = element_text(angle = 90)
+  )
+
+ggsave(paste0("figures/models/",model_type, "/R2_distribution_boxplot_condition_LH.png"),
+       width = 50,
+       height = 45,
+       units = "mm",
+       dpi = 300)
+
+
+#Summary table-----------------------------
+
+# Create summary table
+r2_summary <- r2_long %>%
+  group_by(common_name, Condition, method) %>%
+  summarise(
+    n = sum(!is.na(R2)),
+    mean_R2 = mean(R2, na.rm = TRUE),
+    sd_R2 = sd(R2, na.rm = TRUE),
+    median_R2 = median(R2, na.rm = TRUE),
+    min_R2 = min(R2, na.rm = TRUE),
+    max_R2 = max(R2, na.rm = TRUE),
+    IQR_R2 = IQR(R2, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    across(
+      c(mean_R2, sd_R2, median_R2, min_R2, max_R2, IQR_R2),
+      ~ round(.x, 2)
+    )
+  ) %>%
+  arrange(common_name, Condition, method)
+
+
+# Print summary table
+r2_summary
+
+# Save r2_summary as CSV 
+write_csv( r2_summary, "analysis/models/GIMME_tpm_25perc/r2_summary.csv" )
+
+#MAE plot ---------------------------------------
+mae_long <- r2_by_rxn %>%
+  pivot_longer(
+    cols = starts_with("MAE_"),
+    names_to = "method",
+    values_to = "MAE"
+  ) %>%
+  mutate(
+    method = recode(method,
+                    "MAE_pFBA" = "pFBA",
+                    "MAE_FBA"  = "FBA"),
+    reaction_id_ordered = reorder_within(reaction_id, MAE, common_name)
+  )
+
+
+mae_long <- mae_long %>%
+  mutate(
+    reaction_clean = reaction_id %>%
+      
+      # remove prefix
+      str_remove("^EX_") %>%
+      
+      # remove model suffix
+      str_remove("___.*$") %>%
+      
+      # unify parentheses and underscores
+      str_replace_all("\\(e\\)", "_e") %>%
+      str_replace_all("_+", "_") %>%
+      
+      # REMOVE stereochemistry / compartment junk AFTER splitting
+      str_remove("_.*$") %>%
+      
+      # final cleanup
+      str_to_lower()
+  )
+
+mae_long %>%
+  distinct(reaction_id, reaction_clean) %>%
+  arrange(reaction_clean)
+
+order_levels <- mae_long %>%
+  filter(common_name == "iCHOv1", method == "pFBA") %>%
+  arrange(desc(MAE)) %>%
+  pull(reaction_clean) %>%
+  unique()
+
+mae_long <- mae_long %>%
+  mutate(reaction_clean = factor(reaction_clean, levels = order_levels),
+         common_name = factor(
+           common_name,
+           levels = c(
+             "iCHOv1",
+             "iCHO2441",
+             "iCHO3K"
+           )
+         ))
+
+mae_long %>%
+  filter(grepl("glc", reaction_id)) %>%
+  distinct(reaction_id, reaction_clean)
+
+ggplot(
+  mae_long,
+  aes(
+    x = common_name,
+    y = MAE,
+    fill = Condition,
+    color = Condition
+  )
+) +
+  
+  # Individual observations, jittered within each Condition
+  geom_point(
+    aes(fill = Condition, color = Condition),
+    alpha = POINT_ALPHA,
+    size = POINT_SIZE,
+    shape = 21,
+    stroke = 0.5,
+    position = position_jitterdodge(
+      jitter.width = 0.1,
+      dodge.width = DODGE_WIDTH
+    ),
+    show.legend = FALSE,
+    na.rm = TRUE
+  ) +
+  
+  # Boxplots, side-by-side by Condition 
+  geom_boxplot( alpha = BAR_ALPHA, 
+                outlier.shape = NA, 
+                width = 0.7, 
+                position = position_dodge(width = DODGE_WIDTH), 
+                na.rm = TRUE ) +
+  
+  labs(
+    x = "",
+    y = "Mean absolute error"
+  ) +
+  facet_wrap( ~method) +
+  
+  scale_fill_manual(values = color_condition_long) +
+  scale_color_manual(values = color_condition_long) +
+  
+  theme_bw(
+    base_size = PLOT_FONT_SIZE,
+    base_family = FONT_FAMILY
+  ) +
+  
+  theme_tidy() +
+  
+  theme(
+    strip.text = element_text(size = PANEL_LABEL_SIZE),
+    axis.title = element_text(size = PLOT_FONT_SIZE),
+    axis.text = element_text(size = PLOT_FONT_SIZE),
+    legend.title = element_text(size = PLOT_FONT_SIZE),
+    legend.text = element_text(size = PLOT_FONT_SIZE)
+  )
+
+ggsave(filename = paste0("figures/models/", model_type,"/exchange_rate_exp_pred_mae.png"),
+       # device = cairo_pdf,
+       height = 50,
+       width = 140,
+       units = "mm",
+       dpi = 600,
+       bg = "white")
+
+# Save r2_summary as CSV 
+write_csv( mae_long,paste0("analysis/models/",model_type,"/mae_exchange_summary.csv" ))
+# other plots -------------------------------------------------------------
+
 
 ggplot(r2_by_rxn, aes(x = r2_FBA, y = r2_pFBA)) +
   geom_point(size = 2.5, alpha = 0.8, color = "black") +
@@ -302,8 +519,10 @@ ggplot(r2_by_rxn, aes(x = r2_FBA, y = r2_pFBA)) +
     
   )
 
-ggsave("figures/models/exp_constrained/R2_method_comparison.png",
-       width = 125,
-       height = 75,
+ggsave("figures/models/exp_constrained/R2_distribution_boxplot_condition.png",
+       width = 50,
+       height = 35,
        units = "mm",
        dpi = 300)
+
+
