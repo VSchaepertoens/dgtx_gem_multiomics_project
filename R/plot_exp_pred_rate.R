@@ -9,8 +9,9 @@ measured <- read_csv("data/rates/growth_rate.csv")
 #   # filter(AA_meta == "Growth_rate") %>%
 #   mutate(Type = "measured")
 #   # select(!Condition)
+type <- "exp_constrained" # exp_constrained or GIMME_tpm_25perc
 
-predicted <- read_csv("analysis/models/exp_constrained/mus_FBA_pFBA.csv")
+predicted <- read_csv(paste0("analysis/models/", type,"/mus_FBA_pFBA.csv"))
 #predicted <- read_csv("analysis/models/GIMME/mus_FBA_pFBA_GIMME.csv")
 # predicted <- read_csv("analysis/models/GIMME_tpm_25perc/mus_FBA_pFBA.csv")
 
@@ -181,8 +182,8 @@ ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_barplot_growth rate.png"
 #R2 as barplots Larissa theme ---------------------------------------------
 
 # Bar plot settings
-PLOT_FONT_SIZE  <- 6
-PANEL_LABEL_SIZE <- 8
+PLOT_FONT_SIZE  <- 12 # was 6 for paper figures
+PANEL_LABEL_SIZE <- 12 # was 8 for paper figures
 FONT_FAMILY     <- "Liberation Sans"
 
 BAR_ALPHA       <- 0.25
@@ -274,13 +275,17 @@ ggplot(
     legend.text = element_text(size = PLOT_FONT_SIZE)
   )
 
-ggsave("figures/models/exp_constrained/R2_distribution_barplot_growth_rate_LH.png",
+ggsave(paste0("figures/models/", type, "/R2_distribution_barplot_growth_rate_LH.png"),
        width = 50,
        height = 35,
        units = "mm",
        dpi = 300)
 
-
+ggsave(paste0("figures/models/", type, "/poster/R2_distribution_barplot_growth_rate_LH.png"),
+       width = 150,
+       height = 100,
+       units = "mm",
+       dpi = 300)
 
 # Save r2_summary as CSV 
 write_csv( r2_df, "analysis/models/GIMME_tpm_25perc/r2_summary_growth.csv" )
@@ -429,6 +434,14 @@ ggsave(filename = "figures/models/exp_constrained/growth_rate_exp_pred_mae.png",
        height = 2,
        width = 3.5,
        # units = "mm",
+       dpi = 600,
+       bg = "white")
+
+ggsave(filename = paste0("figures/models/",type,"/poster/growth_rate_exp_pred_mae.png"),
+       # device = cairo_pdf,
+       height = 100,
+       width = 150,
+       units = "mm",
        dpi = 600,
        bg = "white")
 
