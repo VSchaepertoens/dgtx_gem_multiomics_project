@@ -32,7 +32,7 @@ measured_mapped %>%
   filter(is.na(reaction_id)) %>%
   distinct(label)
 
-model_type <- "exp_constrained" #or GIMME_tpm_25perc or GIMME_25perc or exp_constrained
+model_type <- "GIMME_tpm_25perc" #or GIMME_tpm_25perc or GIMME_25perc or exp_constrained
 
 #load predicted fluxes
 predicted <- read_csv(paste0("analysis/models/",model_type, "/reaction_fluxes_CV_ONLY_exp_constrained.csv"))
@@ -249,8 +249,8 @@ ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_boxplot_condition.png",
 #R2 as barplots Larissa theme ---------------------------------------------
 
 # Bar plot settings
-PLOT_FONT_SIZE  <- 6
-PANEL_LABEL_SIZE <- 8
+PLOT_FONT_SIZE  <- 12 #6
+PANEL_LABEL_SIZE <- 12 #8
 FONT_FAMILY     <- "Liberation Sans"
 
 BAR_ALPHA       <- 0.25
@@ -326,7 +326,7 @@ ggplot(
     axis.text = element_text(size = PLOT_FONT_SIZE),
     legend.title = element_text(size = PLOT_FONT_SIZE),
     legend.text = element_text(size = PLOT_FONT_SIZE),
-    axis.text.x = element_text(angle = 90)
+    # axis.text.x = element_text(angle = 90)
   )
 
 ggsave(paste0("figures/models/",model_type, "/R2_distribution_boxplot_condition_LH.png"),
@@ -335,6 +335,11 @@ ggsave(paste0("figures/models/",model_type, "/R2_distribution_boxplot_condition_
        units = "mm",
        dpi = 300)
 
+ggsave(paste0("figures/models/",model_type, "/poster/R2_distribution_boxplot_condition_LH.png"),
+       width = 200,
+       height = 150,
+       units = "mm",
+       dpi = 300)
 
 #Summary table-----------------------------
 
@@ -487,6 +492,14 @@ ggsave(filename = paste0("figures/models/", model_type,"/exchange_rate_exp_pred_
        # device = cairo_pdf,
        height = 50,
        width = 140,
+       units = "mm",
+       dpi = 600,
+       bg = "white")
+
+ggsave(filename = paste0("figures/models/", model_type,"/poster/exchange_rate_exp_pred_mae.png"),
+       # device = cairo_pdf,
+       height = 150,
+       width = 230,
        units = "mm",
        dpi = 600,
        bg = "white")
