@@ -6,6 +6,7 @@
 .Rprofile
 renv/
 R/gantt_table.R
+R/arch
 
 
 # Python
