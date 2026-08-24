@@ -3,6 +3,7 @@
 .Rhistory
 .RData
 .Ruserdata
+.Rprofile
 renv/
 R/gantt_table.R
 
@@ -12,19 +13,24 @@ __pycache__/
 *.pyc
 env/
 .idea/
+python/arch
 
 # Data
-.data
+analysis/
+data/
 figures/
 
-models/original/iCHO2441.xml
-models/original/iCHO2441.mat
-models/original/iCHO3K_cho_prod_generic_unblocked.json
-models/original/iCHO3K_cho_prod_generic_unblocked.xml
-models/original/iCHO3K_cho_prod_generic_unblocked.mat
-models/original/iCHOv1.json
-models/original/iCHOv1.xml
-models/original/iCHOv1.mat
+#models/original/
+#models/original/iCHO2441.xml
+#models/original/iCHO2441.mat
+#models/original/iCHO3K_cho_prod_generic_unblocked.json
+#models/original/iCHO3K_cho_prod_generic_unblocked.xml
+#models/original/iCHO3K_cho_prod_generic_unblocked.mat
+#models/original/iCHOv1.json
+#models/original/iCHOv1.xml
+#models/original/iCHOv1.mat
+
+models/
 
 presentations/
 
