@@ -3,8 +3,9 @@ source("R/plotting_utils.R", local = FALSE)
 library(ComplexHeatmap)
 library(circlize)  # for color mapping functions
 
+type <- "exp_constrained" # or "GIMME_tpm_25perc" or "exp_constrained"
 
-flux_df <- read_csv("analysis/models/exp_constrained/reaction_fluxes_FBA_pFBA.csv") %>%
+flux_df <- read_csv(paste0("analysis/models/",type,"/reaction_fluxes_FBA_pFBA.csv")) %>%
   mutate(common_name = recode(
     common_name,
     "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
@@ -15,10 +16,10 @@ flux_df <- read_csv("analysis/models/exp_constrained/reaction_fluxes_FBA_pFBA.cs
 reactions <- c("HEX1", "PGI", "TKT2", "TALA", "TKT1", "RPE",
                "RPI", "GND", "PGL", "G6PDH2r",
                "PFK", "FBA", "TPI", "GAPD",
-               "PGK",  "PGM", "ENO", "PYK", "LDH_D","LDH_L",
+               "PGK",  "PGM", "ENO", "r0122", "PYK", "LDH_D","LDH_L",
                "ALATA_L", "PYRt2m", "PYRtm", "PCm", "CSm", "ACONTam", "ACONTbm", "ICDHyrm",
                "AKGDm","SUCOASm", "SUCD1m", "FUMm", "MDHm",
-               "OCOAT1m", "PEPCK", "OAADC", "LDH_Lm", "L_LACtcm", "L_LACt4r")
+               "OCOAT1m", "OAADC", "LDH_Lm", "L_LACtcm", "L_LACt4r")
 
 
 # reactions <- c("3SPYRSPm", "CITMCOALm", "DDPGAm", "LDH_Lm", "AGTim", "D3AIBTm", "ME1m", "ME2m", "MERCSULFTm",
@@ -36,6 +37,15 @@ reactions <- c("HEX1", "PGI", "TKT2", "TALA", "TKT1", "RPE",
 #                "FUCtly", "FK", "F1PGT", "GDPFUCtg", "GFUCS", "HMR_0873",
 #                "GMAND", "MAN1PT2", "r0208", "GALK", "UGLT", "UDPGALtg",
 #                "UDPG4E", "GALU", "PGMT","PGI", "MAN6PI", "PMANM", "GALT")
+
+# reactions <- c("F6Tg", "F6T3g","F6T2g", "M1316M2g", "M16NT1g", "G14Tg",
+#                "G14Tg_1", "G14Tg_new2", "G14Tg_new3", "M1316Mg",
+#                "FUCtly", "FK", "F1PGT", "GDPFUCtg", "GFUCS", "HMR_0873",
+#                "GMAND", "MAN1PT2", "r0208", "GALK", "UGLT", "UDPGALtg",
+#                "UDPG4E", "GALU", "PGMT","PGI", "MAN6PI", "PMANM", "GALT")
+# reactions <- c("3SPYRSP", "ACNMLr", "ALR", "GapFill-R04941", "HMR_3859", "L_LACDcm", "MCPST", "ME2", "PGAM1_PhosHydro", "PYRSMCT1", "PYRt2p", "PYRt4_2",
+#                "r0060", "r0122", "r0153", "r0160", "r0165", "r0280", "r0413", "r1464", "r2079", "r2086", "r2093", "r2094", "r2095", "r2096", "r2097",
+#                "r2098", "r2099", "r2100", "RE2954C")
 
 color_mapping_condition <- c(
   "Constant" = "#E6641E",
@@ -86,6 +96,7 @@ reaction_plots <- lapply(reactions, function(rxn) {
 names(reaction_plots) <- reactions
 
 reaction_plots[["HEX1"]]
+
 reaction_plots[["PGI"]]
 reaction_plots[["PFK"]]
 reaction_plots[["PGM"]]
@@ -99,12 +110,12 @@ reaction_plots[["OAADC"]]
 
 
 
-dir.create("figures/models/exp_constrained/reaction_fluxes", recursive = TRUE, showWarnings = FALSE)
+dir.create(paste0("figures/models/",type,"/reaction_fluxes"), recursive = TRUE, showWarnings = FALSE)
 
 for (rxn in names(reaction_plots)) {
   
   ggsave(
-    file.path("figures/models/exp_constrained/reaction_fluxes", paste0(rxn, ".png")),
+    file.path(paste0("figures/models/",type, "/reaction_fluxes/",rxn, ".png")),
     reaction_plots[[rxn]],
     width = 3,
     height = 2,
@@ -134,7 +145,7 @@ pathway_groups <- data.frame(
   Reaction = c(
     # Glycolysis
     "HEX1", "PGI", "PFK", "FBA", "TPI", "GAPD",
-    "PGK", "PGM", "ENO", "PYK",
+    "PGK", "PGM", "ENO", "PYK","r0122",
     
     # Pentose Phosphate Pathway
     "TKT2", "TALA", "TKT1", "RPE", "RPI", "GND", "PGL", "G6PDH2r",
@@ -149,7 +160,7 @@ pathway_groups <- data.frame(
     "PYRt2m", "PYRtm",
     
     # Anaplerotic Reactions
-    "PCm", "PEPCK", "OAADC",
+    "PCm", "OAADC",
     
     # TCA Cycle
     "CSm", "ACONTam", "ACONTbm", "ICDHyrm",
@@ -161,7 +172,7 @@ pathway_groups <- data.frame(
   
   Pathway = c(
     # Glycolysis (10 reactions)
-    rep("Glycolysis", 10),
+    rep("Glycolysis", 11),
     
     # Pentose Phosphate Pathway (8 reactions)
     rep("Pentose Phosphate", 8),
@@ -176,7 +187,7 @@ pathway_groups <- data.frame(
     rep("Pyruvate Transport", 2),
     
     # Anaplerotic Reactions (3 reactions)
-    rep("Anaplerosis", 3),
+    rep("Anaplerosis", 2),
     
     # TCA Cycle (10 reactions)
     rep("TCA", 10),
@@ -205,7 +216,13 @@ flux_heatmap_df <- flux_plot_df %>%
     values_from = pFBA_Flux
   ) %>%
   left_join(pathway_groups, by = "Reaction") %>%
-  mutate(Reaction = factor(Reaction, levels = pathway_groups$Reaction)) %>%
+  mutate(
+    Reaction = recode(Reaction, "r0122" = "r0122/PYK3"),
+    Reaction = factor(
+      Reaction,
+      levels = recode(pathway_groups$Reaction, "r0122" = "r0122/PYK3")
+    )
+  ) %>%
   arrange(Pathway, Reaction)
 
 # Extract matrix for heatmap
@@ -403,7 +420,7 @@ heatmap_plot <- Heatmap(
   heatmap_width = unit(120, "mm"),  # Slightly less than max to accommodate annotations
   heatmap_height = unit(50, "mm"),  # Slightly less than max to accommodate annotations
   
-  # # Legend settings option 1. 
+  # # Legend settings option 1.
   # heatmap_legend_param = list(
   #   title = expression("pFBA Flux\n[mM gDCW"^-1~"h"^-1~"]"),
   #   at = c(-0.20, -0.10, -0.05, 0, 0.05, 0.10, 0.20),
@@ -416,9 +433,9 @@ heatmap_plot <- Heatmap(
   #     "0.10",
   #     "0.20"
   #   ),
-  #   
+  # 
   #   # direction = "horizontal",
-  #   
+  # 
   #   title_gp = gpar(
   #     fontsize = 6,
   #     fontface = "bold"
@@ -461,7 +478,7 @@ draw(heatmap_plot,
      annotation_legend_side = "right")
 
 # Save the heatmap as PDF with exact dimensions
-pdf("figures/models/exp_constrained/reaction_fluxes/flux_heatmap_horizontal_opt2.pdf", 
+pdf(paste0("figures/models/",type,"/reaction_fluxes/flux_heatmap_horizontal_opt2.pdf"), 
     width = 180/25.4,  # Convert mm to inches (180 mm)
     height = 60/25.4,  # Convert mm to inches (60 mm)
     pointsize = 6)
@@ -471,7 +488,7 @@ draw(heatmap_plot,
 dev.off()
 
 # Also save as PNG for quick viewing
-png("figures/models/exp_constrained/reaction_fluxes/flux_heatmap_horizontal_opt2.png",
+png(paste0("figures/models/",type, "/reaction_fluxes/flux_heatmap_horizontal_opt2.png"),
     width = 180, height = 60, units = "mm", res = 300)
 draw(heatmap_plot, 
      heatmap_legend_side = "right",
