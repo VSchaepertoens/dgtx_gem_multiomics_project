@@ -10,12 +10,12 @@ from pathlib import Path
 cobra.Configuration().solver = "glpk"
 
 # %% Section 1: Load models
-MODELS_DIR = get_models_dir(mode="GIMME")
+MODELS_DIR = get_models_dir(mode="GIMME_tpm_25perc")
 models, summary_df = load_models(MODELS_DIR)
 
 #%% # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
-SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME"
+SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME_tpm_25perc"
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 print(f"Analysis will be saved to: {SAVE_FOLDER}")
 
@@ -74,7 +74,7 @@ for model_name, base_model in models.items():
         print(f"⚠️ No biomass reaction for {model_name}")
         continue
 
-    # initialize dicts (UNCHANGED)
+    # initialize dicts
     mus_fba[model_name] = {}
     mus_pfba[model_name] = {}
     reaction_data_fba[model_name] = {}
@@ -200,7 +200,7 @@ for model_name, base_model in models.items():
             r.lower_bound, r.upper_bound = orig_lb, orig_ub
 
         # -----------------------------
-        # store baseline MUS (UNCHANGED)
+        # store baseline MUS
         # -----------------------------
         mus_records.append({
             "model_name": model_name,
@@ -235,7 +235,7 @@ for model_name, base_model in models.items():
 reaction_df = pd.DataFrame(reaction_records)
 
 reaction_df.to_csv(
-    SAVE_FOLDER / "reaction_fluxes_CV_FBA_pFBA_GIMME.csv",
+    SAVE_FOLDER / "reaction_fluxes_CV_FBA_pFBA_exp_constrained.csv",
     index=False
 )
 
@@ -246,7 +246,7 @@ print("✅ Saved reaction flux CV data")
 # -----------------------------
 cv_only_df = reaction_df[reaction_df.get("Reaction").notna()]
 cv_only_df.to_csv(
-    SAVE_FOLDER / "reaction_fluxes_CV_ONLY_GIMME.csv",
+    SAVE_FOLDER / "reaction_fluxes_CV_ONLY_exp_constrained.csv",
     index=False
 )
 

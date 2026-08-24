@@ -10,12 +10,12 @@ from pathlib import Path
 cobra.Configuration().solver = "glpk"
 
 # %% Section 1: Load models
-MODELS_DIR = get_models_dir(mode="GIMME")
+MODELS_DIR = get_models_dir(mode="exp_constrained")
 models, summary_df = load_models(MODELS_DIR)
 
 #%% # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
-SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME"
+SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "exp_constrained"
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 print(f"Analysis will be saved to: {SAVE_FOLDER}")
 
@@ -24,7 +24,7 @@ rates = pd.read_csv("data/rates/rates_mM_gDCW_h_new.csv")
 # Clean column names if needed
 rates.columns = [c.strip() for c in rates.columns]
 
-rates = rates[rates.Metabolite != "Titer"] #only added for when igg is the objective
+rates = rates[rates.Metabolite != "Titer"] #line added for when igg is the objective
 
 # Load exchange reaction mapping
 ex_rxn_df = pd.read_csv("models/original/exchange_igg_rxn_id.csv")
@@ -47,45 +47,45 @@ igg_reactions = {
     "iCHOv1": "DM_igg_g"
 }
 
-# %% Section 2.2: Load experimental data
+# %% Section 2.2: Load experimental data to constrain biomass
 growth_df = pd.read_csv("data/rates/growth_rate.csv")
 growth_df.columns = [c.strip() for c in growth_df.columns]
 
 # %%
-def parse_condition_window(model_name: str):
-    """
-    Extract Condition and Window from model name.
-
-    Works for:
-    - iCHOv1_Constant_4_constrained
-    - iCHOv1_Temp. shifted_2_constrained
-    - iCHO3K_..._Constant_1_GIMME
-    - future variants with additional suffixes
-
-    Returns
-    -------
-    (condition: str, window: int)
-    """
-
-    # 🔹 Detect condition
-    if "Constant" in model_name:
-        condition = "Constant"
-    elif "Temp. shifted" in model_name:
-        condition = "Temp. shifted"
-    else:
-        print(f"⚠️ Could not detect condition in {model_name}")
-        return None, None
-
-    # 🔹 Extract window (last integer in string)
-    numbers = re.findall(r'\d+', model_name)
-
-    if not numbers:
-        print(f"⚠️ Could not extract window from {model_name}")
-        return condition, None
-
-    window = int(numbers[-1])
-
-    return condition, window
+# def parse_condition_window(model_name: str):
+#     """
+#     Extract Condition and Window from model name.
+#
+#     Works for:
+#     - iCHOv1_Constant_4_constrained
+#     - iCHOv1_Temp. shifted_2_constrained
+#     - iCHO3K_..._Constant_1_GIMME
+#     - future variants with additional suffixes
+#
+#     Returns
+#     -------
+#     (condition: str, window: int)
+#     """
+#
+#     # 🔹 Detect condition
+#     if "Constant" in model_name:
+#         condition = "Constant"
+#     elif "Temp. shifted" in model_name:
+#         condition = "Temp. shifted"
+#     else:
+#         print(f"⚠️ Could not detect condition in {model_name}")
+#         return None, None
+#
+#     # 🔹 Extract window (last integer in string)
+#     numbers = re.findall(r'\d+', model_name)
+#
+#     if not numbers:
+#         print(f"⚠️ Could not extract window from {model_name}")
+#         return condition, None
+#
+#     window = int(numbers[-1])
+#
+#     return condition, window
 
 # %% Section 4.2: Loop through Models, Conditions, Windows. Set bounds, save models and get FBA/pFBA solutions
 # maximize antibody production under observed growth + nutrient uptake
@@ -269,7 +269,7 @@ for model_name, base_model in models.items():
 mus_df = pd.DataFrame(mus_records)
 
 mus_df.to_csv(
-    SAVE_FOLDER / "mus_igg_FBA_pFBA_GIMME.csv",
+    SAVE_FOLDER / "mus_igg_FBA_pFBA_exp_constrained.csv",
     index=False
 )
 
@@ -287,7 +287,7 @@ reaction_df = reaction_df.sort_values(
 )
 
 reaction_df.to_csv(
-    SAVE_FOLDER / "reaction_igg_fluxes_FBA_pFBA_GIMME.csv",
+    SAVE_FOLDER / "reaction_igg_fluxes_FBA_pFBA_exp_constrained.csv",
     index=False
 )
 
