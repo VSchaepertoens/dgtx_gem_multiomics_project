@@ -8,14 +8,14 @@
   - `python/02_model_diagnostics.py` : 
   
   Experimental Constrains & Contextualization using GIMME
-    - `python/03_set_bounds.py` : 
-    - `R/04_preprocess_transcriptomics.R` : 
-    - `Matlab/05_contextualize_GIMME.R` :
+  - `python/03_set_bounds.py` : 
+  - `R/04_preprocess_transcriptomics.R` : 
+  - `Matlab/05_contextualize_GIMME.R` :
   
   Models Solution & Validation
-    - `python/06_maximise_biomass.py` : 
-    - `python/07_maximise_igg.py` : 
-    - `python/08_leave_out_one_cv.py` : 
+  - `python/06_maximise_biomass.py` : 
+  - `python/07_maximise_igg.py` : 
+  - `python/08_leave_out_one_cv.py` : 
 
   
   Metabolic Pathways & Final Plots
