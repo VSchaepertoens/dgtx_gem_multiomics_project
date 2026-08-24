@@ -8,7 +8,7 @@ SHA256 checksums were calculated at time of download to ensure file integrity.
 
 ------------------------------------------------------------------------
 
-\## iCHO1766 (iCHOv1 in BiGG)
+\# iCHO1766 (iCHOv1 in BiGG)
 
 -   File name: iCHOv1.xml
 
@@ -26,7 +26,7 @@ SHA256 checksums were calculated at time of download to ensure file integrity.
 
 ------------------------------------------------------------------------
 
-\## iCHO2441
+\# iCHO2441
 
 -   File name: iCHO2441.xml
 -   Download date: 2026-02-24
@@ -38,7 +38,7 @@ SHA256 checksums were calculated at time of download to ensure file integrity.
 
 ------------------------------------------------------------------------
 
-\## iCHO3k (iCHO3K_cho_prod_generic_unblocked on GitHub)
+\# iCHO3k (iCHO3K_cho_prod_generic_unblocked on GitHub)
 
 -   File name: iCHO3K_cho_prod_generic_unblocked.xml
 -   Download date: 2026-02-24
@@ -55,7 +55,7 @@ SHA256 checksums were calculated at time of download to ensure file integrity.
 
 ------------------------------------------------------------------------
 
-\## Summary
+\# Summary
 
 | Model    | Reactions | Genes | Compartments | Year |
 |----------|-----------|-------|--------------|------|
