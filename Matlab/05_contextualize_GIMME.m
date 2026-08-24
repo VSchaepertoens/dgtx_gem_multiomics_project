@@ -9,7 +9,7 @@ initCobraToolbox(false)   % false = do not update
 %% 2. Project paths
 % Project root
 PROJECT_ROOT = pwd; 
-outFolder = fullfile(PROJECT_ROOT, 'models/contextualized/GIMME_25perc');
+outFolder = fullfile(PROJECT_ROOT, 'models/contextualized/GIMME_tpm_25perc');
 if ~exist(outFolder, 'dir')
     mkdir(outFolder);
 end
@@ -35,7 +35,7 @@ biomassReactions = containers.Map( ...
 
 %% 4. Load transcriptomics data
 % CSV format: EntrezID, Constant_W1, Constant_W2, ..., TempShift_W5
-exprTable = readtable('data/transcriptomics/charrun_FBA_RNA3_all_V02_20260311_VS.csv');
+exprTable = readtable('data/transcriptomics/FBA_RNA_windows_TPMs/charrun_FBA_RNA3_all_V01_20260717_VS.csv');
 
 % Optional: convert EntrezID column to strings to match COBRA Toolbox gene IDs
 exprTable.EntrezID = string(exprTable.EntrezID);
@@ -57,7 +57,7 @@ for i = 1:numel(varNames)
     newName = strrep(newName, '_W', '_');
 
     % Replace 'TempShift' → 'Temp shifted'
-    newName = strrep(newName, 'TempShift', 'Temp. shifted');
+    newName = strrep(newName, 'Temp_Shifted', 'Temp. shifted');
 
     % Apply new name
     exprTable.Properties.VariableNames{i} = newName;
