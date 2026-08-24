@@ -31,11 +31,10 @@ SHA256 checksums were calculated at time of download to ensure file integrity.
 -   File name: iCHO2441.xml
 -   Download date: 2026-02-24
 -   Source: <https://data.mendeley.com/datasets/73cmrfk8x9/1>
--   DOI: 10.17632/73cmrfk8x9.1
+-   DOI: <http://dx.doi.org/10.17632/73cmrfk8x9.1> 
 -   Publication: Kontoravdi, Cleo; Strain, Benjamin; Morrissey, James; Antonakoudis, Athanasios (2022), “iCHO2441 genome-scale metabolic model”
 -   License: CC BY 4.0
 -   SHA-256 checksum: 9019af34d3d4931fb4cc0676c24ef993f29d609778827828544768ae7decf8af
--   Notes:
 
 ------------------------------------------------------------------------
 
@@ -44,7 +43,7 @@ SHA256 checksums were calculated at time of download to ensure file integrity.
 -   File name: iCHO3K_cho_prod_generic_unblocked.xml
 -   Download date: 2026-02-24
 -   Source: <https://github.com/LewisLabUCSD/iCHO3K/tree/main/iCHO3K/Model>
--   DOI: <https://doi.org/10.1101/2025.04.10.647063>
+-   DOI: <https://doi.org/10.1016/j.cels.2026.101574>
 -   Publication: Di Giusto, P., Choi, D.-H., et al. (2025). A community-consensus reconstruction of Chinese Hamster metabolism enables structural systems biology analyses to decipher metabolic rewiring in lactate-free CHO cells.
 -   Notes: Downloaded as SBML Level 3
 -   Source repository: LewisLabUCSD/iCHO3K (GitHub)
