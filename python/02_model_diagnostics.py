@@ -16,7 +16,7 @@ cobra.Configuration().solver = "glpk"
 from pathlib import Path
 
 # %% Section 1:  Load models
-MODELS_DIR = get_models_dir(mode="GIMME")
+MODELS_DIR = get_models_dir(mode="exp_constrained")
 models, summary_df = load_models(MODELS_DIR)
 
 # %% Section 2: Initialize results containers
@@ -464,7 +464,7 @@ for model_name, model in models.items():
 
 
  # %% Section 7: Minimal medium required for ATP production
-cobra.Configuration().solver = "glpk"
+#cobra.Configuration().solver = "glpk"
 minimal_medium_results = []
 
 for model_name, model in models.items():
@@ -858,8 +858,8 @@ energy_min_ex_dict = {
 # energy_min_ex_dict = {r["model_name"]: r["atp_flux_all_exchanges"] for r in energy_results_minimal_exchanges}
 energy_glc_o2_dict = {r["model_name"]: r["atp_flux_glc_o2"] for r in energy_results_transporters if "atp_flux_glc_o2" in r}
 energy_transporter_dict = {r["model_name"]: r["atp_flux_with_transporters"] for r in energy_results_transporters if "atp_flux_with_transporters" in r}
-blocked_dict = {r["model_name"]: r["num_blocked_reactions"] for r in blocked_results}
-blocked_rxn_ids = {r["model_name"]: r["blocked_reactions"] for r in blocked_results}
+#blocked_dict = {r["model_name"]: r["num_blocked_reactions"] for r in blocked_results}
+#blocked_rxn_ids = {r["model_name"]: r["blocked_reactions"] for r in blocked_results}
 fva_min_dict = fva_minimal_medium_df.set_index("model_name")["ATP_min_flux"].to_dict()
 fva_max_dict = fva_minimal_medium_df.set_index("model_name")["ATP_max_flux"].to_dict()
 minimal_medium_flux_dict = {r["model_name"]: r["ATP_max_flux_minimal_medium"] for r in minimal_medium_flux_results}
@@ -910,8 +910,8 @@ for model_name, model in models.items():
         "num_metabolites": num_metabolites,
         "num_genes": num_genes,
         "num_exchanges": num_exchanges,
-        "num_blocked_reactions": blocked_dict.get(model_name),
-        "blocked_reaction_ids": blocked_rxn_ids.get(model_name, []),
+        #"num_blocked_reactions": blocked_dict.get(model_name),
+        #"blocked_reaction_ids": blocked_rxn_ids.get(model_name, []),
         "atp_flux_minimal": energy_min_dict.get(model_name),
         "atp_flux_glc_o2": energy_glc_o2_dict.get(model_name),
         "atp_flux_with_transporters": energy_transporter_dict.get(model_name),
@@ -943,14 +943,15 @@ print(comparison_df)
 # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
 #ANALYSIS_MODELS_DIR = PROJECT_ROOT / "analysis" / "models" / "original"
-ANALYSIS_MODELS_DIR = PROJECT_ROOT / "analysis" / "models" / "GIMME"
+ANALYSIS_MODELS_DIR = PROJECT_ROOT / "analysis" / "models" / "exp_constrained"
+#ANALYSIS_MODELS_DIR = PROJECT_ROOT / "analysis" / "models" / "GIMME"
 
 # Create directories if they don't exist
 ANALYSIS_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 print(f"Results will be saved to: {ANALYSIS_MODELS_DIR}")
 
-comparison_csv_path = ANALYSIS_MODELS_DIR / "model_comparison_final_gimme.csv"
+comparison_csv_path = ANALYSIS_MODELS_DIR / "model_comparison_final.csv"
 comparison_df.to_csv(comparison_csv_path, index=False)
 print(f"✅ Comparison table saved at {comparison_csv_path}")
 
@@ -1072,7 +1073,8 @@ plt.tight_layout()
 
 # Project root is two levels up from python/
 #FIGURES_MODELS_DIR = PROJECT_ROOT / "figures" / "models" / "original"
-FIGURES_MODELS_DIR = PROJECT_ROOT / "figures" / "models" / "GIMME"
+#FIGURES_MODELS_DIR = PROJECT_ROOT / "figures" / "models" / "GIMME"
+FIGURES_MODELS_DIR = PROJECT_ROOT / "figures" / "models" / "exp_constrained"
 
 # Create directories if they don't exist
 FIGURES_MODELS_DIR.mkdir(parents=True, exist_ok=True)
