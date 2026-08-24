@@ -32,6 +32,8 @@ def get_models_dir(mode: str = "original", custom_path: Optional[Path] = None) -
         MODELS_DIR = BASE_DIR / "models" / "exp_constrained"
     elif mode == "GIMME25perc":
         MODELS_DIR = BASE_DIR / "models" / "contextualized" / "GIMME_25perc"
+    elif mode == "GIMME_tpm_25perc":
+        MODELS_DIR = BASE_DIR / "models" / "contextualized" / "GIMME_tpm_25perc"
     else:
         raise ValueError(f"Unknown mode '{mode}'. Choose 'original', 'GIMME', or 'mCADRE', or 'exp_constrained'.")
 
