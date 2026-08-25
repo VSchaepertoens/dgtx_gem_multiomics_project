@@ -1,4 +1,4 @@
-source("R/plotting_utils.R", local = FALSE)
+source("R/utils/plotting_utils.R", local = FALSE)
 library(tidyverse)
 
 measured <- read_csv("data/rates/growth_rate.csv") 
@@ -9,11 +9,9 @@ measured <- read_csv("data/rates/growth_rate.csv")
 #   # filter(AA_meta == "Growth_rate") %>%
 #   mutate(Type = "measured")
 #   # select(!Condition)
-type <- "exp_constrained" # exp_constrained or GIMME_tpm_25perc
+type <- "GIMME_tpm_25perc" # exp_constrained or GIMME_tpm_25perc
 
 predicted <- read_csv(paste0("analysis/models/", type,"/mus_FBA_pFBA.csv"))
-#predicted <- read_csv("analysis/models/GIMME/mus_FBA_pFBA_GIMME.csv")
-# predicted <- read_csv("analysis/models/GIMME_tpm_25perc/mus_FBA_pFBA.csv")
 
 color_mapping_condition <- c(
   "Constant" = "#E6641E",
@@ -112,7 +110,7 @@ ggplot(df_plot, aes(x = avg_growth_µ, y = predicted_mu)) +
   #       axis.text = element_text(color = "black", size = 11),
   #       axis.title = element_text(color = "black", size = 11))
 
-ggsave(filename = "figures/models/exp_constrained/growth_rate_exp_pred_legend.pdf",
+ggsave(filename = paste0("figures/models/",type,"/growth_rate_exp_pred_legend.pdf"),
        device = cairo_pdf,
        height = 3,
        width = 4,
@@ -154,7 +152,7 @@ ggplot(r2_df, aes(x = "Growth", y = r2, color = Condition)) +
   theme_tidy() 
 
 
-ggsave("figures/models/exp_constrained/R2_distribution_boxplot_growth rate.png",
+ggsave(paste0("figures/models/",type,"/R2_distribution_boxplot_growth rate.png"),
        width = 50,
        height = 35,
        units = "mm",
@@ -173,7 +171,7 @@ ggplot(r2_df, aes(x = common_name, y = r2, fill = Condition)) +
   theme_tidy()
 
 
-ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_barplot_growth rate.png",
+ggsave(paste0("figures/models/",type,"/R2_distribution_barplot_growth rate.png"),
        width = 50,
        height = 35,
        units = "mm",
@@ -182,8 +180,8 @@ ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_barplot_growth rate.png"
 #R2 as barplots Larissa theme ---------------------------------------------
 
 # Bar plot settings
-PLOT_FONT_SIZE  <- 12 # was 6 for paper figures
-PANEL_LABEL_SIZE <- 12 # was 8 for paper figures
+PLOT_FONT_SIZE  <- 6 # was 6 for paper figures
+PANEL_LABEL_SIZE <- 6 # was 8 for paper figures
 FONT_FAMILY     <- "Liberation Sans"
 
 BAR_ALPHA       <- 0.25
@@ -288,7 +286,7 @@ ggsave(paste0("figures/models/", type, "/poster/R2_distribution_barplot_growth_r
        dpi = 300)
 
 # Save r2_summary as CSV 
-write_csv( r2_df, "analysis/models/GIMME_tpm_25perc/r2_summary_growth.csv" )
+write_csv( r2_df, paste0("analysis/models/",type,"/r2_summary_growth.csv") )
 # mean absolute error -----------------------------------------------------
 
 error_df <- df_long %>%
@@ -330,7 +328,7 @@ ggplot(mae_summary,
 
 theme_tidy()
 
-ggsave(filename = "figures/models/exp_constrained/growth_rate_exp_pred_mae.pdf",
+ggsave(filename = paste0("figures/models/",type,"/growth_rate_exp_pred_mae.pdf"),
        device = cairo_pdf,
        height = 3,
        width = 4,
@@ -374,7 +372,7 @@ ggplot(
   
   # Set y-axis limits
   scale_y_continuous(
-    limits = c(0, 0.01)
+    limits = c(0, 0.012)
   ) +
   
   # Separate panels for prediction type
@@ -421,15 +419,15 @@ ggplot(
     )
   )
 
-ggsave(filename = "figures/models/exp_constrained/growth_rate_exp_pred_mae.pdf",
-       device = cairo_pdf,
-       height = 3,
-       width = 4,
-       # units = "mm",
-       dpi = 600,
-       bg = "white")
+# ggsave(filename = paste0("figures/models/",type,"/growth_rate_exp_pred_mae.pdf"),
+#        device = cairo_pdf,
+#        height = 3,
+#        width = 4,
+#        # units = "mm",
+#        dpi = 600,
+#        bg = "white")
 
-ggsave(filename = "figures/models/exp_constrained/growth_rate_exp_pred_mae.png",
+ggsave(filename = paste0("figures/models/",type,"/growth_rate_exp_pred_mae.png"),
        # device = cairo_pdf,
        height = 2,
        width = 3.5,
@@ -446,4 +444,4 @@ ggsave(filename = paste0("figures/models/",type,"/poster/growth_rate_exp_pred_ma
        bg = "white")
 
 # Save r2_summary as CSV 
-write_csv( mae_summary, "analysis/models/exp_constrained/mae_growth_summary.csv" )
+write_csv( mae_summary, paste0("analysis/models/",type,"/mae_growth_summary.csv") )

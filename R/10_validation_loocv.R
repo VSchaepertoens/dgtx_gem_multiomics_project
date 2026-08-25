@@ -1,5 +1,5 @@
 # libraries
-source("R/plotting_utils.R", local = FALSE)
+source("R/utils/plotting_utils.R", local = FALSE)
 
 library(tidyverse)
 library(janitor)
@@ -9,8 +9,6 @@ library(tidytext)
 
 identifiers <- read_csv("models/original/exchange_igg_rxn_id.csv")
 head(identifiers)
-
-
 
 #load experimental data
 measured <-read_csv("data/rates/rates_mM_gDCW_h_new.csv") %>%
@@ -35,7 +33,7 @@ measured_mapped %>%
 model_type <- "GIMME_tpm_25perc" #or GIMME_tpm_25perc or GIMME_25perc or exp_constrained
 
 #load predicted fluxes
-predicted <- read_csv(paste0("analysis/models/",model_type, "/reaction_fluxes_CV_ONLY_exp_constrained.csv"))
+predicted <- read_csv(paste0("analysis/models/",model_type, "/reaction_fluxes_CV_ONLY_",model_type,".csv"))
 
 head(predicted)
 
@@ -99,7 +97,7 @@ mutate(common_name = recode(
        ))
 
 
-# checking Asp NA ---------------------------------------------------------
+# checking Asp and Lac NA GIMME_tpm_25perc-----------------------------------------------------
 predicted_ASP <- predicted_clean %>% filter(reaction_id == "EX_asp_L_e") 
 # View(predicted_ASP)
 
@@ -111,8 +109,22 @@ ASP_r2 <- predicted_ASP %>%
     n = n(),
     .groups = "drop"
   )
+#For GIMME_tpm_25perc model  ASP pFBA in TS is always 0 → the correlation-based R² is undefined.
 
-#For this model  ASP pFBA is always 0 → the correlation-based R² is undefined.
+# checking Lac NA
+predicted_LAC <- predicted_clean %>% filter(reaction_id == "EX_lac_L_e") 
+# View(predicted_ASP)
+
+LAC_r2 <- predicted_ASP %>%
+  group_by(common_name, Condition) %>%
+  summarize(
+    r2_pFBA = cor(measured_flux, pFBA_Flux, use = "complete.obs")^2,
+    r2_FBA = cor(measured_flux, FBA_Flux, use = "complete.obs")^2,
+    n = n(),
+    .groups = "drop"
+  )
+
+#For GIMME_tpm_25perc model  LAC pFBA in TS is always 0 → the correlation-based R² is undefined.
 
 # plotting-------------------------------------------------------
 #plot experimental vs predicted, facet by reaction id, add R2 text
@@ -216,7 +228,7 @@ ggplot(r2_long, aes(x = reaction_clean, y = R2, fill = method)) +
     axis.title = element_text(color = "black", size = 11)
   )
 
-ggsave("figures/models/exp_constrained/R2_by_reaction_barplot.png",
+ggsave(paste0("figures/models/",model_type,"/R2_by_reaction_barplot.png"),
        width = 300,
        height = 150,
        units = "mm",
@@ -240,7 +252,7 @@ ggplot(r2_long, aes(x = method, y = R2)) +
   theme_tidy() +
   theme(axis.text.x = element_text(angle = 90))
 
-ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_boxplot_condition.png",
+ggsave(paste0("figures/models/",model_type,"/R2_distribution_boxplot_condition.png"),
        width = 50,
        height = 35,
        units = "mm",
@@ -249,8 +261,8 @@ ggsave("figures/models/GIMME_tpm_25perc/R2_distribution_boxplot_condition.png",
 #R2 as barplots Larissa theme ---------------------------------------------
 
 # Bar plot settings
-PLOT_FONT_SIZE  <- 12 #6
-PANEL_LABEL_SIZE <- 12 #8
+PLOT_FONT_SIZE  <- 6 #6
+PANEL_LABEL_SIZE <- 6 #8
 FONT_FAMILY     <- "Liberation Sans"
 
 BAR_ALPHA       <- 0.25
@@ -508,7 +520,6 @@ ggsave(filename = paste0("figures/models/", model_type,"/poster/exchange_rate_ex
 write_csv( mae_long,paste0("analysis/models/",model_type,"/mae_exchange_summary.csv" ))
 # other plots -------------------------------------------------------------
 
-
 ggplot(r2_by_rxn, aes(x = r2_FBA, y = r2_pFBA)) +
   geom_point(size = 2.5, alpha = 0.8, color = "black") +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
@@ -532,7 +543,7 @@ ggplot(r2_by_rxn, aes(x = r2_FBA, y = r2_pFBA)) +
     
   )
 
-ggsave("figures/models/exp_constrained/R2_distribution_boxplot_condition.png",
+ggsave(paste0("figures/models/",model_type,"/R2_distribution_boxplot_condition.png"),
        width = 50,
        height = 35,
        units = "mm",
