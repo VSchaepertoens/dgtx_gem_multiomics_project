@@ -1,5 +1,5 @@
 library(tidyverse)
-source("R/plotting_utils.R", local = FALSE)
+source("R/utils/plotting_utils.R", local = FALSE)
 library(ComplexHeatmap)
 library(circlize)  # for color mapping functions
 
@@ -420,52 +420,52 @@ heatmap_plot <- Heatmap(
   heatmap_width = unit(120, "mm"),  # Slightly less than max to accommodate annotations
   heatmap_height = unit(50, "mm"),  # Slightly less than max to accommodate annotations
   
-  # # Legend settings option 1.
-  # heatmap_legend_param = list(
-  #   title = expression("pFBA Flux\n[mM gDCW"^-1~"h"^-1~"]"),
-  #   at = c(-0.20, -0.10, -0.05, 0, 0.05, 0.10, 0.20),
-  #   labels = c(
-  #     "-0.20",
-  #     "-0.10",
-  #     "-0.05",
-  #     "0",
-  #     "0.05",
-  #     "0.10",
-  #     "0.20"
-  #   ),
-  # 
-  #   # direction = "horizontal",
-  # 
-  #   title_gp = gpar(
-  #     fontsize = 6,
-  #     fontface = "bold"
-  #   ),
-  #   labels_gp = gpar(
-  #     fontsize = 6
-  #   ),
-  #   grid_height = unit(2, "mm"),
-  #   grid_width = unit(2, "mm")
-  # ),
-
-  #Legend settings option 2
+  # Legend settings option 1.
   heatmap_legend_param = list(
     title = expression("pFBA Flux\n[mM gDCW"^-1~"h"^-1~"]"),
-    at = c(-0.20, -0.05, -0.01, 0, 0.01, 0.05, 0.10, 0.20),
+    at = c(-0.20, -0.10, -0.05, 0, 0.05, 0.10, 0.20),
     labels = c(
       "-0.20",
+      "-0.10",
       "-0.05",
-      "-0.01",
       "0",
-      "0.01",
       "0.05",
       "0.10",
       "0.20"
     ),
-    title_gp = gpar(fontsize = 6, fontface = "bold"),
-    labels_gp = gpar(fontsize = 6),
+
+    # direction = "horizontal",
+
+    title_gp = gpar(
+      fontsize = 6,
+      fontface = "bold"
+    ),
+    labels_gp = gpar(
+      fontsize = 6
+    ),
     grid_height = unit(2, "mm"),
     grid_width = unit(2, "mm")
   ),
+
+  # #Legend settings option 2
+  # heatmap_legend_param = list(
+  #   title = expression("pFBA Flux\n[mM gDCW"^-1~"h"^-1~"]"),
+  #   at = c(-0.20, -0.05, -0.01, 0, 0.01, 0.05, 0.10, 0.20),
+  #   labels = c(
+  #     "-0.20",
+  #     "-0.05",
+  #     "-0.01",
+  #     "0",
+  #     "0.01",
+  #     "0.05",
+  #     "0.10",
+  #     "0.20"
+  #   ),
+  #   title_gp = gpar(fontsize = 6, fontface = "bold"),
+  #   labels_gp = gpar(fontsize = 6),
+  #   grid_height = unit(2, "mm"),
+  #   grid_width = unit(2, "mm")
+  # ),
   
   # Annotations
   bottom_annotation = column_annotation_pathway,
@@ -478,7 +478,7 @@ draw(heatmap_plot,
      annotation_legend_side = "right")
 
 # Save the heatmap as PDF with exact dimensions
-pdf(paste0("figures/models/",type,"/reaction_fluxes/flux_heatmap_horizontal_opt2.pdf"), 
+pdf(paste0("figures/models/",type,"/reaction_fluxes/flux_heatmap_horizontal_opt1.pdf"), 
     width = 180/25.4,  # Convert mm to inches (180 mm)
     height = 60/25.4,  # Convert mm to inches (60 mm)
     pointsize = 6)
@@ -488,7 +488,7 @@ draw(heatmap_plot,
 dev.off()
 
 # Also save as PNG for quick viewing
-png(paste0("figures/models/",type, "/reaction_fluxes/flux_heatmap_horizontal_opt2.png"),
+png(paste0("figures/models/",type, "/reaction_fluxes/flux_heatmap_horizontal_opt1.png"),
     width = 180, height = 60, units = "mm", res = 300)
 draw(heatmap_plot, 
      heatmap_legend_side = "right",
