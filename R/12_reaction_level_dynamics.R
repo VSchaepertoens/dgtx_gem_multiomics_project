@@ -80,16 +80,24 @@ reaction_plots <- lapply(reactions, function(rxn) {
       group = Condition
     )
   ) +
-    geom_line(linewidth = 0.8) +
-    geom_point(size = 2) +
+    geom_line(linewidth = 0.5) +
+    geom_point(size = 0.5) +
     labs(
       title = rxn,
-      x = "Window",
-      y = expression(paste("pFBA Flux [mM ", gDCW^{-1}, " ", h^{-1}, "]"))
+      x = "",
+      y = ""
+      # x = "Window",
+      # y = expression(paste("pFBA Flux [mM ", gDCW^{-1}, " ", h^{-1}, "]"))
     ) +
     scale_color_manual(values = color_mapping_condition) +
     theme_bw() +
-    theme_tidy()
+    theme_tidy() +
+    theme(
+      plot.margin = margin(t = 1, 
+                           r = 1, 
+                           b = 0.1, 
+                           l = 0.1, unit = "pt")
+    )
   
 })
 
@@ -117,8 +125,9 @@ for (rxn in names(reaction_plots)) {
   ggsave(
     file.path(paste0("figures/models/",type, "/reaction_fluxes/",rxn, ".png")),
     reaction_plots[[rxn]],
-    width = 3,
-    height = 2,
+    width = 20,
+    height = 20,
+    units = "mm",
     dpi = 300,
     bg = "white"
   )
