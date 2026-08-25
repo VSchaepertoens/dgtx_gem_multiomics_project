@@ -30,7 +30,7 @@ measured_mapped %>%
   filter(is.na(reaction_id)) %>%
   distinct(label)
 
-model_type <- "GIMME_tpm_25perc" #or GIMME_tpm_25perc or GIMME_25perc or exp_constrained
+model_type <- "exp_constrained" #or GIMME_tpm_25perc or GIMME_25perc or exp_constrained
 
 #load predicted fluxes
 predicted <- read_csv(paste0("analysis/models/",model_type, "/reaction_fluxes_CV_ONLY_",model_type,".csv"))
@@ -228,11 +228,11 @@ ggplot(r2_long, aes(x = reaction_clean, y = R2, fill = method)) +
     axis.title = element_text(color = "black", size = 11)
   )
 
-ggsave(paste0("figures/models/",model_type,"/R2_by_reaction_barplot.png"),
-       width = 300,
-       height = 150,
-       units = "mm",
-       dpi = 300)
+# ggsave(paste0("figures/models/",model_type,"/R2_by_reaction_barplot.png"),
+#        width = 300,
+#        height = 150,
+#        units = "mm",
+#        dpi = 300)
 
 #R2 as barplots ---------------------------------------------
 ggplot(r2_long, aes(x = method, y = R2)) +
@@ -252,11 +252,11 @@ ggplot(r2_long, aes(x = method, y = R2)) +
   theme_tidy() +
   theme(axis.text.x = element_text(angle = 90))
 
-ggsave(paste0("figures/models/",model_type,"/R2_distribution_boxplot_condition.png"),
-       width = 50,
-       height = 35,
-       units = "mm",
-       dpi = 300)
+# ggsave(paste0("figures/models/",model_type,"/R2_distribution_boxplot_condition.png"),
+#        width = 50,
+#        height = 35,
+#        units = "mm",
+#        dpi = 300)
 
 #R2 as barplots Larissa theme ---------------------------------------------
 
@@ -338,7 +338,7 @@ ggplot(
     axis.text = element_text(size = PLOT_FONT_SIZE),
     legend.title = element_text(size = PLOT_FONT_SIZE),
     legend.text = element_text(size = PLOT_FONT_SIZE),
-    # axis.text.x = element_text(angle = 90)
+    axis.text.x = element_text(angle = 90)
   )
 
 ggsave(paste0("figures/models/",model_type, "/R2_distribution_boxplot_condition_LH.png"),
@@ -347,11 +347,11 @@ ggsave(paste0("figures/models/",model_type, "/R2_distribution_boxplot_condition_
        units = "mm",
        dpi = 300)
 
-ggsave(paste0("figures/models/",model_type, "/poster/R2_distribution_boxplot_condition_LH.png"),
-       width = 200,
-       height = 150,
-       units = "mm",
-       dpi = 300)
+# ggsave(paste0("figures/models/",model_type, "/poster/R2_distribution_boxplot_condition_LH.png"),
+#        width = 200,
+#        height = 150,
+#        units = "mm",
+#        dpi = 300)
 
 #Summary table-----------------------------
 
