@@ -10,12 +10,12 @@ from pathlib import Path
 cobra.Configuration().solver = "glpk"
 
 # %% Section 1: Load models
-MODELS_DIR = get_models_dir(mode="exp_constrained")
+MODELS_DIR = get_models_dir(mode="GIMME_tpm_25perc")
 models, summary_df = load_models(MODELS_DIR)
 
 #%% # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
-SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "exp_constrained"
+SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME_tpm_25perc"
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 print(f"Analysis will be saved to: {SAVE_FOLDER}")
 
@@ -269,7 +269,7 @@ for model_name, base_model in models.items():
 mus_df = pd.DataFrame(mus_records)
 
 mus_df.to_csv(
-    SAVE_FOLDER / "mus_igg_FBA_pFBA_exp_constrained.csv",
+    SAVE_FOLDER / "mus_igg_FBA_pFBA_GIMME_tpm_25perc.csv",
     index=False
 )
 
@@ -287,7 +287,7 @@ reaction_df = reaction_df.sort_values(
 )
 
 reaction_df.to_csv(
-    SAVE_FOLDER / "reaction_igg_fluxes_FBA_pFBA_exp_constrained.csv",
+    SAVE_FOLDER / "reaction_igg_fluxes_FBA_pFBA_GIMME_tpm_25perc.csv",
     index=False
 )
 

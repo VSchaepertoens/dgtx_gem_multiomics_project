@@ -235,7 +235,7 @@ for model_name, base_model in models.items():
 reaction_df = pd.DataFrame(reaction_records)
 
 reaction_df.to_csv(
-    SAVE_FOLDER / "reaction_fluxes_CV_FBA_pFBA_exp_constrained.csv",
+    SAVE_FOLDER / "reaction_fluxes_CV_FBA_pFBA_GIMME_tpm_25perc.csv",
     index=False
 )
 
@@ -246,7 +246,7 @@ print("✅ Saved reaction flux CV data")
 # -----------------------------
 cv_only_df = reaction_df[reaction_df.get("Reaction").notna()]
 cv_only_df.to_csv(
-    SAVE_FOLDER / "reaction_fluxes_CV_ONLY_exp_constrained.csv",
+    SAVE_FOLDER / "reaction_fluxes_CV_ONLY_GIMME_tpm_25perc.csv",
     index=False
 )
 
