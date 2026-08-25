@@ -422,7 +422,7 @@ plot(p_combined)
 ggsave("figures/models/exp_constrained/pca_combined_models.pdf", p_combined, width = 6.5, height = 3)
 
 # Also create individual plots for each model with variance in titles
-for(model in c("iCHOv1", "iCHO2441", "iCHO3K")) {
+for(model in c("iCHO3K")) {
   if(model %in% names(pca_results)) {
     p_individual <- ggplot(
       pca_results[[model]]$pca_df,
@@ -450,13 +450,14 @@ for(model in c("iCHOv1", "iCHO2441", "iCHO3K")) {
       )
     
     # Save individual plot
-    ggsave(paste0("figures/models/exp_constrained/pca_", model, ".pdf"), 
-           p_individual, width = 2, height = 2)
+
     
     plot(p_individual)
   }
 }
 
+ggsave("figures/models/exp_constrained/pca_iCHO3k.png", 
+       p_individual, width = 2, height = 2)
 
 # # reaction-levels dynamics ------------------------------------------------
 # For each model, get top reactions by trajectory class
@@ -897,7 +898,7 @@ p_traj_classes <- ggplot(
     x = NULL,
     y = "Number of reactions"
   ) +
-  scale_y_continuous(limits = c(0, 1100)) +
+  scale_y_continuous(limits = c(0, 1200)) +
   
   theme_bw() +
   theme_tidy() +
