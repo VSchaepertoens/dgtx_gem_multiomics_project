@@ -1,7 +1,7 @@
 library(tidyverse)
 library(ComplexHeatmap)
 library(circlize)
-source("R/plotting_utils.R", local = FALSE)
+source("R/utils/plotting_utils.R", local = FALSE)
 library(tidytext)
 
 flux_df <- read_csv("analysis/models/exp_constrained/reaction_fluxes_FBA_pFBA.csv")
@@ -313,18 +313,41 @@ for(model in models) {
 
 
 # PCA plots ---------------------------------------------------------------
+pca_rxns <- rxn_classes %>%
+  filter(direction_consistency != "Always inactive") %>%
+  select(common_name, Reaction)
+
+pca_fluxes <- flux_df %>%
+  inner_join(
+    pca_rxns,
+    by = c("common_name", "Reaction")
+  ) %>%
+  mutate(
+    common_name = recode(
+      common_name,
+      "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+    )
+  )
+
+
+flux_df_clean <- flux_df %>%
+  mutate(
+    common_name = recode(
+      common_name,
+      "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+    )
+  )
+
 # Create a list to store PCA results
 pca_results <- list()
 
-for(model in models) {
+for(model in c("iCHO3K")) {
   
   message("Running PCA for: ", model)
   
-  # Filter model
-  model_flux <- active_fluxes %>%
+  model_flux <- pca_fluxes %>%
     filter(common_name == model)
   
-  # Build sample x reaction matrix
   pca_matrix <- model_flux %>%
     mutate(
       sample_id = paste(Condition, Window, sep = "_")
@@ -339,41 +362,46 @@ for(model in models) {
     pivot_wider(
       id_cols = c(sample_id, Condition, Window),
       names_from = Reaction,
-      values_from = pFBA_Flux
+      values_from = pFBA_Flux,
+      values_fill = 0
     )
   
-  # Metadata
   metadata <- pca_matrix %>%
     select(sample_id, Condition, Window)
   
-  # Flux matrix
   flux_mat <- pca_matrix %>%
     select(-sample_id, -Condition, -Window) %>%
     as.matrix()
   
-  # Remove zero variance reactions
   reaction_sd <- apply(flux_mat, 2, sd)
-  flux_mat <- flux_mat[, reaction_sd > 0 & !is.na(reaction_sd)]
   
-  message("Retained reactions: ", ncol(flux_mat))
+  flux_mat <- flux_mat[
+    ,
+    reaction_sd > 0 & !is.na(reaction_sd),
+    drop = FALSE
+  ]
   
-  # PCA
+  message("Reactions before variance filtering: ",
+          length(reaction_sd))
+  
+  message("Reactions retained for PCA: ",
+          ncol(flux_mat))
+  
   pca_res <- prcomp(
     flux_mat,
     center = TRUE,
     scale. = TRUE
   )
   
-  # Scores
   pca_df <- as.data.frame(pca_res$x) %>%
     bind_cols(metadata) %>%
-    mutate(Model = model,
-           Window = as.character(Window))
+    mutate(
+      Model = model,
+      Window = as.character(Window)
+    )
   
-  # Variance explained
   var_exp <- summary(pca_res)$importance[2, ] * 100
   
-  # Store results
   pca_results[[model]] <- list(
     pca_df = pca_df,
     var_exp = var_exp,
@@ -916,6 +944,528 @@ ggsave(
   width = 80,
   height = 60,
   units = "mm"
+)
+
+# 27.08.2026-------------
+
+# ============================================================
+# REACTION-LEVEL TEMPORAL DYNAMICS
+# ============================================================
+#
+# Input:
+#   active_fluxes
+#
+# active_fluxes should contain the same reaction universe used
+# for the PCA:
+# reactions active in at least one experimental context.
+#
+# Trajectories are calculated separately for each:
+#   model × reaction × condition
+#
+# Classes:
+#   Stable
+#   Increasing
+#   Decreasing
+#   Transient
+#   Other
+#
+# ============================================================
+
+
+# ------------------------------------------------------------
+# 1. Calculate trajectory features
+# ------------------------------------------------------------
+
+traj_features <- pca_fluxes %>%
+  
+  arrange(
+    common_name,
+    Reaction,
+    Condition,
+    Window
+  ) %>%
+  
+  group_by(
+    common_name,
+    Reaction,
+    Condition
+  ) %>%
+  
+  summarise(
+    
+    # Mean flux across time windows
+    mean_flux =
+      mean(pFBA_Flux, na.rm = TRUE),
+    
+    # Total range across time windows
+    flux_range =
+      max(pFBA_Flux, na.rm = TRUE) -
+      min(pFBA_Flux, na.rm = TRUE),
+    
+    # Total amount of flux movement across consecutive windows
+    cumulative_travel =
+      sum(abs(diff(pFBA_Flux))),
+    
+    # Net change from first to last window
+    net_change =
+      last(pFBA_Flux) -
+      first(pFBA_Flux),
+    
+    # Linear temporal trend
+    slope =
+      coef(
+        lm(
+          pFBA_Flux ~ Window
+        )
+      )[2],
+    
+    .groups = "drop"
+  )
+
+
+# ------------------------------------------------------------
+# 2. Calculate travel ratio
+# ------------------------------------------------------------
+#
+# Approximately 1:
+#   mostly monotonic trajectory
+#
+# > 1:
+#   some reversals in direction
+#
+# >= 2:
+#   strongly non-monotonic / transient behavior
+#
+# ------------------------------------------------------------
+
+traj_features <- traj_features %>%
+  mutate(
+    
+    travel_ratio =
+      cumulative_travel /
+      (abs(net_change) + 1e-9)
+    
+  )
+
+
+# ------------------------------------------------------------
+# 3. Define trajectory thresholds
+# ------------------------------------------------------------
+
+# Flux range below this value is considered effectively constant.
+# Adjust if necessary according to the numerical precision/scale
+# of your flux data.
+
+flux_stability_thresh <- 1e-6
+
+
+# Minimum absolute temporal slope required to classify a reaction
+# as increasing or decreasing.
+
+slope_thresh <- 0.01
+
+
+# ------------------------------------------------------------
+# 4. Classify trajectories
+# ------------------------------------------------------------
+
+traj_features <- traj_features %>%
+  mutate(
+    
+    trajectory_class = case_when(
+      
+      # No meaningful change across windows
+      flux_range <= flux_stability_thresh ~
+        "Stable",
+      
+      # Predominantly monotonic increase
+      slope > slope_thresh &
+        travel_ratio < 2 ~
+        "Increasing",
+      
+      # Predominantly monotonic decrease
+      slope < -slope_thresh &
+        travel_ratio < 2 ~
+        "Decreasing",
+      
+      # Strongly non-monotonic trajectory
+      travel_ratio >= 2 ~
+        "Transient",
+      
+      # Remaining cases with small/ambiguous trends
+      TRUE ~
+        "Other"
+    )
+  )
+
+
+# ------------------------------------------------------------
+# 5. Check trajectory counts
+# ------------------------------------------------------------
+
+traj_features %>%
+  count(
+    common_name,
+    Condition,
+    trajectory_class
+  ) %>%
+  arrange(
+    common_name,
+    Condition,
+    trajectory_class
+  ) %>%
+  print()
+
+
+# ============================================================
+# 6. Summarise trajectory classes by model and condition
+# ============================================================
+
+traj_class_summary <- traj_features %>%
+  
+  mutate(
+    
+    common_name = factor(
+      common_name,
+      levels = c(
+        "iCHOv1",
+        "iCHO2441",
+        "iCHO3K"
+      )
+    ),
+    
+    trajectory_class = factor(
+      trajectory_class,
+      levels = c(
+        "Stable",
+        "Increasing",
+        "Decreasing",
+        "Transient",
+        "Other"
+      )
+    )
+    
+  ) %>%
+  
+  count(
+    common_name,
+    Condition,
+    trajectory_class
+  )
+
+
+# ============================================================
+# 7. iCHO3K trajectory summary
+# ============================================================
+
+traj_class_summary_iCHO3K <- traj_class_summary %>%
+  filter(
+    common_name == "iCHO3K"
+  )
+
+
+# ------------------------------------------------------------
+# 8. Plot trajectory classes separately for CT and TS
+# ------------------------------------------------------------
+# Bar plot settings
+PLOT_FONT_SIZE  <- 6 # was 6 for paper figures
+PANEL_LABEL_SIZE <- 6 # was 8 for paper figures
+FONT_FAMILY     <- "Liberation Sans"
+
+BAR_ALPHA       <- 0.25
+ERRORBAR_ALPHA  <- 0.8
+POINT_ALPHA     <- 0.6
+
+POINT_SIZE      <- 1
+LINE_WIDTH      <- 0.6
+
+# Mean ± standard deviation
+mean_sd <- function(x) {
+  data.frame(
+    y = mean(x, na.rm = TRUE),
+    ymin = mean(x, na.rm = TRUE) - sd(x, na.rm = TRUE),
+    ymax = mean(x, na.rm = TRUE) + sd(x, na.rm = TRUE)
+  )
+}
+
+# Dodge settings
+DODGE_WIDTH <- 0.9
+p_traj_classes <- ggplot(
+  traj_class_summary_iCHO3K,
+  aes(
+    x = trajectory_class,
+    y = n,
+    fill = Condition,
+    color = Condition
+  )
+) +
+  
+  geom_col(
+    #position = "dodge",
+    #width = 0.8,
+    linewidth = LINE_WIDTH,
+    alpha = BAR_ALPHA,
+    width = 0.85,
+    position = position_dodge(width = DODGE_WIDTH),
+    na.rm = TRUE
+    
+  ) +
+  
+  geom_text(
+    aes(
+      label = n
+    ),
+    position = position_dodge(width = DODGE_WIDTH),
+    vjust = -0.3,
+    size = pt_to_geom(6)
+  ) +
+  scale_fill_manual(values = color_condition_long) +
+  scale_color_manual(values = color_condition_long) +  
+  labs(
+    x = NULL,
+    y = "Number of reactions",
+    fill = "Condition"
+  ) +
+  
+  scale_y_continuous(
+    expand = expansion(
+      mult = c(0, 0.08)
+    )
+  ) +
+  
+  theme_bw(
+    base_size = PLOT_FONT_SIZE,
+    base_family = FONT_FAMILY
+  ) +  
+  theme_tidy() +
+  
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      color = "black"
+    )
+  )
+
+
+plot(p_traj_classes)
+
+
+# ------------------------------------------------------------
+# Save trajectory-class plot
+# ------------------------------------------------------------
+
+ggsave(
+  "figures/models/exp_constrained/trajectory_classes_iCHO3K_new.png",
+  p_traj_classes,
+  width = 80,
+  height = 60,
+  units = "mm",
+  limitsize = FALSE
+)
+
+
+# ============================================================
+# 9. Compare trajectory behavior between CT and TS
+# ============================================================
+#
+# For each reaction, determine whether its trajectory class
+# is the same or different between conditions.
+#
+# Example:
+#
+# Reaction A:
+#   CT = Increasing
+#   TS = Increasing
+#   -> Same
+#
+# Reaction B:
+#   CT = Stable
+#   TS = Increasing
+#   -> Different
+#
+# ============================================================
+
+trajectory_comparison <- traj_features %>%
+  
+  select(
+    common_name,
+    Reaction,
+    Condition,
+    trajectory_class
+  ) %>%
+  
+  pivot_wider(
+    names_from = Condition,
+    values_from = trajectory_class
+  )
+
+
+# ------------------------------------------------------------
+# 10. Identify whether CT and TS have the same trajectory
+# ------------------------------------------------------------
+
+# This assumes the condition names are "CT" and "TS".
+
+trajectory_comparison <- trajectory_comparison %>%
+  mutate(
+    
+    trajectory_response = case_when(
+      
+      Constant == `Temp. shifted` ~
+        "Same trajectory",
+      
+      TRUE ~
+        "Different trajectory"
+    )
+  )
+
+
+# ------------------------------------------------------------
+# 11. Count same vs different trajectories
+# ------------------------------------------------------------
+
+trajectory_comparison %>%
+  count(
+    common_name,
+    trajectory_response
+  ) %>%
+  arrange(
+    common_name,
+    trajectory_response
+  ) %>%
+  print()
+
+
+# ============================================================
+# 12. Detailed CT vs TS trajectory combinations
+# ============================================================
+#
+# This tells us exactly how reactions change their trajectory
+# behavior between conditions.
+#
+# Example:
+#
+# Stable      -> Increasing
+# Increasing  -> Transient
+# Decreasing  -> Stable
+#
+# ============================================================
+
+trajectory_comparison %>%
+  count(
+    common_name,
+    Constant,
+    `Temp. shifted`
+  ) %>%
+  arrange(
+    common_name,
+    desc(n)
+  ) %>%
+  print()
+
+
+# ============================================================
+# 13. iCHO3K: same vs different trajectory
+# ============================================================
+
+trajectory_comparison_iCHO3K <- trajectory_comparison %>%
+  filter(
+    common_name == "iCHO3K"
+  )
+
+
+trajectory_comparison_iCHO3K %>%
+  count(
+    trajectory_response
+  ) %>%
+  print()
+
+
+# ============================================================
+# 14. Plot same vs different trajectories
+# ============================================================
+
+trajectory_response_summary <- trajectory_comparison_iCHO3K %>%
+  count(
+    trajectory_response
+  )
+
+
+p_trajectory_response <- ggplot(
+  trajectory_response_summary,
+  aes(
+    x = trajectory_response,
+    y = n
+  )
+) +
+  
+  geom_col(
+    fill = "black",
+    width = 0.8
+  ) +
+  
+  geom_text(
+    aes(
+      label = n
+    ),
+    vjust = -0.3,
+    size = pt_to_geom(6)
+  ) +
+  
+  labs(
+    x = NULL,
+    y = "Number of reactions"
+  ) +
+  
+  scale_y_continuous(
+    expand = expansion(
+      mult = c(0, 0.08)
+    )
+  ) +
+  
+  theme_bw() +
+  
+  theme_tidy() +
+  
+  theme(
+    axis.text.x = element_text(
+      angle = 45,
+      hjust = 1,
+      color = "black"
+    )
+  )
+
+
+plot(p_trajectory_response)
+
+
+# ------------------------------------------------------------
+# Save
+# ------------------------------------------------------------
+
+ggsave(
+  "figures/models/exp_constrained/trajectory_response_CT_vs_TS_iCHO3K.pdf",
+  p_trajectory_response,
+  width = 7,
+  height = 5,
+  limitsize = FALSE
+)
+
+
+# ============================================================
+# 15. Save detailed trajectory tables
+# ============================================================
+
+write_csv(
+  traj_features,
+  "figures/models/exp_constrained/trajectory_features.csv"
+)
+
+
+write_csv(
+  trajectory_comparison,
+  "figures/models/exp_constrained/trajectory_comparison_CT_vs_TS.csv"
 )
 
 
