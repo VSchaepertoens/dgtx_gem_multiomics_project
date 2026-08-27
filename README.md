@@ -74,6 +74,12 @@ Scripts are numbered according to their recommended execution order. Utility scr
 | `models/contextualized/` | Transcriptomics-contextualized models |
 | `analysis/models/` | FBA/pFBA solutions, fluxes, and validation results |
 
+  The full raw dataset for this study is archived and publicly available on Zenodo:
+
+  Zenodo DOI:[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.22124845.svg)](https://doi.org/10.5281/zenodo.22124845)
+
+  The processed data provided in this repository were generated entirely from the Zenodo data using the scripts in /scripts.
+
 ## 🚀 Running the Workflow
 
 The numbered scripts are intended to be executed sequentially from the repository root:
