@@ -1429,6 +1429,130 @@ variance_comparison
 #----Calculate pair-wise Spearmann correlations and plot as heatmap ------------------------
 
 
+# --- Reuse the same reaction set as your PCA, filtered to iCHO3K 
+pca_rxns <- rxn_classes %>%
+  filter(
+    direction_consistency != "Always inactive",
+    common_name == "iCHO3K"
+  ) %>%
+  select(Reaction) %>%
+  pull()
+
+# --- Flux matrix (samples x reactions) for iCHO3K only 
+sample_mat <- flux_df %>%
+  filter(common_name == "iCHO3K_cho_prod_generic_unblocked") %>%
+  filter(Reaction %in% pca_rxns) %>%
+  mutate(sample_id = paste(Condition, Window, sep = "_")) %>%
+  select(sample_id, Reaction, pFBA_Flux) %>%
+  pivot_wider(
+    names_from  = Reaction,
+    values_from = pFBA_Flux,
+    values_fill = 0
+  ) %>%
+  column_to_rownames("sample_id") %>%
+  as.matrix()
+
+cat("samples:", nrow(sample_mat), " reactions:", ncol(sample_mat), "\n")
+
+# Drop all-zero reactions (they only add shared zeros to Spearman)
+keep <- colSums(sample_mat != 0) > 0
+sample_mat <- sample_mat[, keep, drop = FALSE]
+cat("kept reactions:", ncol(sample_mat), "\n")
+
+# --- Spearman correlation between samples ---
+cor_mat <- cor(t(sample_mat), method = "spearman", use = "pairwise.complete.obs")
+print(round(cor_mat, 3))
+
+# --- Metadata aligned to cor_mat order ---
+meta <- tibble(sample_id = rownames(cor_mat)) %>%
+  separate(sample_id, into = c("Condition", "Window"), sep = "_", remove = FALSE) %>%
+  mutate(
+    Condition = recode(Condition,
+                       "Constant"      = "CT",
+                       "Temp. shifted" = "TS"
+    ),
+    Window = factor(Window, levels = sort(unique(as.numeric(Window))))
+  )
+stopifnot(all(meta$sample_id == rownames(cor_mat)))
+stopifnot(all(meta$sample_id == colnames(cor_mat)))
+
+
+top_ha <- HeatmapAnnotation(
+  Condition = meta$Condition,
+  Window    = meta$Window,
+  col = list(
+    Condition = c("CT" = "#E6641E", "TS" = "#4B288C"),
+    Window    = setNames(
+      circlize::rand_color(length(levels(meta$Window)), luminosity = "light"),
+      levels(meta$Window)
+    )
+  ),
+  annotation_name_gp = gpar(fontsize = 6),
+  annotation_legend_param = list(
+    title_gp  = gpar(fontsize = 6),
+    labels_gp = gpar(fontsize = 6)
+  )
+)
+
+
+ht <- Heatmap(
+  cor_mat,
+  name = "Spearman\nρ",
+  col  = colorRamp2(c(0.5, 0.75, 1), c("white", "#fddbc7", "#b2182b")),
+  top_annotation   = top_ha,
+  left_annotation  = rowAnnotation(
+    Condition = meta$Condition,
+    col = list(Condition = c("CT" = "#E6641E", "TS" = "#4B288C")),
+    show_legend = FALSE
+  ),
+  show_row_names    = TRUE,
+  show_column_names = TRUE,
+  row_names_gp    = gpar(fontsize = 5),
+  column_names_gp = gpar(fontsize = 5),
+  column_title    = "Sample-wise Spearman correlation — iCHO3K",
+  column_title_gp = gpar(fontsize = 8, fontface = "bold"),
+  cluster_rows    = TRUE,
+  cluster_columns = TRUE,
+  clustering_method_rows    = "ward.D2",
+  clustering_method_columns = "ward.D2",
+  clustering_distance_rows    = "euclidean",
+  clustering_distance_columns = "euclidean",
+  row_split    = meta$Condition,
+  column_split = meta$Condition
+)
+
+draw(ht)
+
+##
+mdl <- "iCHO3K"
+
+pca_fluxes_mdl <- pca_fluxes %>% filter(common_name == mdl)
+
+sample_mat_mdl <- pca_fluxes_mdl %>%
+  mutate(sample_id = paste(Condition, Window, sep = "_")) %>%
+  select(sample_id, Reaction, pFBA_Flux) %>%
+  pivot_wider(names_from = Reaction, values_from = pFBA_Flux, values_fill = 0) %>%
+  column_to_rownames("sample_id") %>%
+  as.matrix()
+
+cat("samples:", nrow(sample_mat_mdl), " reactions:", ncol(sample_mat_mdl), "\n")
+print(rowSums(sample_mat_mdl != 0))
+
+keep <- colSums(sample_mat_mdl != 0) > 0
+sample_mat_mdl <- sample_mat_mdl[, keep, drop = FALSE]
+cat("kept reactions:", ncol(sample_mat_mdl), "\n")
+
+cor_mdl <- cor(t(sample_mat_mdl), method = "spearman")
+print(round(cor_mdl, 3))
+
+Heatmap(
+  cor_mdl,
+  name = "rho",
+  col = colorRamp2(c(0.5, 1), c( "white", "#b2182b")),
+  column_title = mdl,
+  show_row_names = TRUE, show_column_names = TRUE
+)
+
 
 # # reaction-levels dynamics ------------------------------------------------
 # For each model, get top reactions by trajectory class
