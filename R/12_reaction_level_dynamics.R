@@ -18,7 +18,7 @@ reactions <- c("HEX1", "PGI", "TKT2", "TALA", "TKT1", "RPE",
                "PFK", "FBA", "TPI", "GAPD",
                "PGK",  "PGM", "ENO", "r0122", "PYK", "LDH_D","LDH_L",
                "ALATA_L", "PYRt2m", "PYRtm", "PCm", "CSm", "ACONTam", "ACONTbm", "ICDHyrm",
-               "AKGDm","SUCOASm", "SUCD1m", "FUMm", "MDHm",
+               "AKGDm","SUCOASm", "SUCOAS1m", "SUCD1m", "FUMm", "MDHm",
                "OCOAT1m", "OAADC", "LDH_Lm", "L_LACtcm", "L_LACt4r")
 
 
@@ -69,6 +69,28 @@ flux_plot_df <- flux_df %>%
     Reaction = factor(Reaction, levels = reactions)
   )
 
+# Create succoa -> succ for each Condition + Window
+new_reaction <- flux_plot_df %>%
+  filter(Reaction %in% c("SUCOAS1m", "OCOAT1m")) %>%
+  group_by(model_name, common_name, Condition, Window) %>%
+  summarise(
+    FBA_LB    = -(sum(FBA_LB)),
+    FBA_UB    = -(sum(FBA_UB)),
+    FBA_Flux  = -(sum(FBA_Flux)),
+    pFBA_LB   = -(sum(pFBA_LB)),
+    pFBA_UB   = -(sum(pFBA_UB)),
+    pFBA_Flux = -(sum(pFBA_Flux)),
+    Reaction  = "succoa -> succ",
+    .groups = "drop"
+  )
+
+# Remove the original reactions and add the new reaction
+flux_plot_df <- flux_plot_df %>%
+  filter(!Reaction %in% c("SUCOAS1m", "OCOAT1m")) %>%
+  bind_rows(new_reaction)
+
+reactions <- c(reactions, "succoa -> succ")
+
 reaction_plots <- lapply(reactions, function(rxn) {
   
   ggplot(
@@ -105,7 +127,7 @@ names(reaction_plots) <- reactions
 
 reaction_plots[["HEX1"]]
 
-reaction_plots[["PGI"]]
+reaction_plots[["succoa -> succ"]]
 reaction_plots[["PFK"]]
 reaction_plots[["PGM"]]
 
@@ -142,6 +164,36 @@ for (rxn in names(reaction_plots)) {
   # )
 }
 
+out_dir <- file.path(
+  "figures/models",
+  type,
+  "reaction_fluxes"
+)
+
+dir.create(
+  out_dir,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+for (rxn in names(reaction_plots)) {
+  
+  # Make a filesystem-safe filename
+  safe_rxn <- rxn |>
+    gsub(" -> ", "_to_", x = _) |>
+    gsub("[^[:alnum:]_.-]", "_", x = _)
+  
+  ggsave(
+    filename = file.path(out_dir, paste0(safe_rxn, ".png")),
+    plot = reaction_plots[[rxn]],
+    width = 20,
+    height = 20,
+    units = "mm",
+    dpi = 300,
+    bg = "white"
+  )
+}
+
 
 
 
@@ -173,7 +225,7 @@ pathway_groups <- data.frame(
     
     # TCA Cycle
     "CSm", "ACONTam", "ACONTbm", "ICDHyrm",
-    "AKGDm", "SUCOASm", "SUCD1m", "FUMm", "MDHm", "OCOAT1m",
+    "AKGDm", "SUCD1m", "SUCOAS1m", "succoa -> succ", "FUMm", "MDHm",
     
     # Lactate Metabolism and Transport
     "LDH_Lm", "L_LACtcm", "L_LACt4r"
@@ -208,6 +260,9 @@ pathway_groups <- data.frame(
   stringsAsFactors = FALSE
 )
 
+flux_cols <- c("CT_1", "CT_2", "CT_3", "CT_4", "CT_5",
+               "TS_1", "TS_2", "TS_3", "TS_4", "TS_5")
+
 # Prepare data for heatmap
 flux_heatmap_df <- flux_plot_df %>%
   filter(Reaction %in% pathway_groups$Reaction) %>%
@@ -234,6 +289,21 @@ flux_heatmap_df <- flux_plot_df %>%
   ) %>%
   arrange(Pathway, Reaction)
 
+# # Create the new reaction
+# new_reaction <- flux_heatmap_df %>%
+#   filter(Reaction %in% c("SUCOAS1m", "OCOAT1m")) %>%
+#   summarise(
+#     across(all_of(flux_cols), ~ -sum(.x)),
+#     Reaction = "succoa -> succ",
+#     Pathway = "TCA"
+#   )
+# 
+# # Remove the two original reactions and add the new one
+# flux_heatmap_df <- flux_heatmap_df %>%
+#   filter(!Reaction %in% c("SUCOAS1m", "OCOAT1m")) %>%
+#   bind_rows(new_reaction)
+
+
 # Extract matrix for heatmap
 matrix_data <- flux_heatmap_df %>%
   select(-Reaction, -Pathway) %>%
@@ -242,10 +312,15 @@ matrix_data <- flux_heatmap_df %>%
 rownames(matrix_data) <- flux_heatmap_df$Reaction
 
 # Define column order: CT1-CT5, TS1-TS5
-column_order <- c(
-  paste("CT", 1:5, sep = "_"),
-  paste("TS", 1:5, sep = "_")
-)
+# column_order <- c(
+#   paste("CT", 1:5, sep = "_"),
+#   paste("TS", 1:5, sep = "_")
+# )
+
+column_order <- as.vector(rbind(
+  paste0("CT_", 1:5),
+  paste0("TS_", 1:5)
+))
 
 # Make sure all columns exist
 column_order <- column_order[column_order %in% colnames(matrix_data)]
@@ -268,15 +343,15 @@ matrix_data_t <- t(matrix_data)
 
 # Define color palette for pathways
 pathway_colors <- c(
-  "Glycolysis" = "#E74C3C",
-  "Pentose Phosphate" = "#3498DB",
-  "Amino Acid" = "#2ECC71",
-  "Fermentation" = "#F39C12",
-  "TCA" = "#9B59B6",
-  "Gluconeogenesis" = "#1ABC9C",
-  "Pyruvate Transport" = "#95A5A6",
-  "Anaplerosis" = "#D35400",
-  "Lactate Metabolism" = "#8E44AD"
+  "Glycolysis"          = "#D73027",  # red
+  "Pentose Phosphate"   = "#4575B4",  # blue
+  "Amino Acid"          = "#1A9850",  # green
+  "Fermentation"        = "#FDAE61",  # orange
+  "TCA"                 = "#7B3294",  # purple
+  "Gluconeogenesis"     = "#008C95",  # teal
+  "Pyruvate Transport"  = "#666666",  # dark gray
+  "Anaplerosis"         = "#A6611A",  # brown
+  "Lactate Metabolism"  = "#C51B7D"   # magenta
 )
 
 # Column annotation for pathways (at bottom)
@@ -334,7 +409,8 @@ heatmap_plot <- Heatmap(
   
   # Row settings (conditions are rows)
   row_order = column_order,
-  row_split = ifelse(grepl("CT", rownames(matrix_data_t)), "CT", "TS"),
+  row_split = sub(".*_", "", rownames(matrix_data_t)),
+  # row_split = ifelse(grepl("CT", rownames(matrix_data_t)), "CT", "TS"),
   row_title = NULL,
   cluster_rows = FALSE,
   show_row_names = TRUE,
@@ -427,7 +503,7 @@ heatmap_plot <- Heatmap(
   
   # Heatmap body settings - max height 60mm, max width 180mm
   heatmap_width = unit(120, "mm"),  # Slightly less than max to accommodate annotations
-  heatmap_height = unit(50, "mm"),  # Slightly less than max to accommodate annotations
+  heatmap_height = unit(60, "mm"),  # Slightly less than max to accommodate annotations
   
   # Legend settings option 1.
   heatmap_legend_param = list(
@@ -497,7 +573,7 @@ draw(heatmap_plot,
 dev.off()
 
 # Also save as PNG for quick viewing
-png(paste0("figures/models/",type, "/reaction_fluxes/flux_heatmap_horizontal_opt1.png"),
+png(paste0("figures/models/",type, "/reaction_fluxes/flux_heatmap_horizontal_opt1_orderBYwindows.png"),
     width = 180, height = 60, units = "mm", res = 300)
 draw(heatmap_plot, 
      heatmap_legend_side = "right",
