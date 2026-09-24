@@ -15,7 +15,7 @@ models, summary_df = load_models(MODELS_DIR)
 
 #%% # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
-SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME_tpm_25perc"
+SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "exp_constrained_ngam"
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 print(f"Analysis will be saved to: {SAVE_FOLDER}")
 
@@ -44,6 +44,16 @@ igg_reactions = {
     "iCHO2441": "DM_igg[g]",
     "iCHOv1": "DM_igg_g"
 }
+
+ngam_reactions = {
+    "iCHO3K_cho_prod_generic_unblocked": "ATPM",
+    "iCHO2441": "DM_atp[c]",
+    "iCHOv1": "ATPM"
+}
+
+# %% Define bounds for energy maintenance reaction
+NGAM_MEAN = 4.3
+NGAM_SD   = 1.7
 
 # %% Section 5: Cross-validation (leave-one-exchange-out)
 mus_records = []
@@ -125,8 +135,21 @@ for model_name, base_model in models.items():
             measured_flux = rate
             r.bounds = (lb, ub)
 
-            applied_rxns.append((rxn_id, lb, ub))
+            applied_rxns.append((rxn_id, lb, ub, rate))
 
+        # --- Apply NGAM constraint ---
+        if common_name in ngam_reactions:
+            ngam_id = ngam_reactions[common_name]
+            if ngam_id in model.reactions:
+                ngam_rxn = model.reactions.get_by_id(ngam_id)
+                ngam_lb, ngam_ub = sorted([NGAM_MEAN - NGAM_SD, NGAM_MEAN + NGAM_SD])
+                ngam_rxn.bounds = (ngam_lb, ngam_ub)
+                print(f"    🔧 NGAM {ngam_id} bounded to [{ngam_lb}, {ngam_ub}]")
+
+                # Include NGAM in the LOO cross-validation
+                applied_rxns.append((ngam_id, ngam_lb, ngam_ub, NGAM_MEAN))
+            else:
+                print(f"⚠️ NGAM reaction {ngam_id} not in {model_name}")
         # objective
         biomass_rxn = biomass_reactions[common_name]
         model.objective = biomass_rxn
@@ -148,7 +171,7 @@ for model_name, base_model in models.items():
         # -----------------------------
         # CROSS-VALIDATION LOOP
         # -----------------------------
-        for rxn_id, lb, ub in applied_rxns:
+        for rxn_id, lb, ub, measured_flux in applied_rxns:
 
             r = model.reactions.get_by_id(rxn_id)
 
@@ -171,7 +194,7 @@ for model_name, base_model in models.items():
                     "Window": w,
                     "Reaction": rxn_id,
 
-                    "measured_flux": rate,
+                    "measured_flux": measured_flux,
 
                     "FBA_LB": lb,
                     "FBA_UB": ub,
@@ -235,7 +258,7 @@ for model_name, base_model in models.items():
 reaction_df = pd.DataFrame(reaction_records)
 
 reaction_df.to_csv(
-    SAVE_FOLDER / "reaction_fluxes_CV_FBA_pFBA_GIMME_tpm_25perc.csv",
+    SAVE_FOLDER / "reaction_fluxes_CV_FBA_pFBA_exp_constrained_ngam.csv",
     index=False
 )
 
@@ -246,7 +269,7 @@ print("✅ Saved reaction flux CV data")
 # -----------------------------
 cv_only_df = reaction_df[reaction_df.get("Reaction").notna()]
 cv_only_df.to_csv(
-    SAVE_FOLDER / "reaction_fluxes_CV_ONLY_GIMME_tpm_25perc.csv",
+    SAVE_FOLDER / "reaction_fluxes_CV_ONLY_exp_constrained_ngam.csv",
     index=False
 )
 
