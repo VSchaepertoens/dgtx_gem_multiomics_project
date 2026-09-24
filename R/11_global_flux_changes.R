@@ -76,8 +76,124 @@ inactive_labels <- class_summary %>%
 plot_df <- class_summary %>%
   filter(direction_consistency != "Always inactive")
 
-# # plot general landscape plots-----------------------
 pt_to_geom <- function(pt) pt / 2.845
+
+#plot pie chart of class summary ----------------------
+plot_class_pie <- function(model_name) {
+  
+  plot_data <- class_summary %>%
+    filter(common_name == model_name) %>%
+    mutate(
+      direction_consistency = recode(
+        direction_consistency,
+        "Always active (negative only)" = "Active (negative)",
+        "Always active (positive only)" = "Active (positive)"
+      ),
+      direction_consistency = factor(
+        direction_consistency,
+        levels = c(
+          "Direction switching",
+          "Always inactive",
+          "Active (positive)",
+          "Active (negative)"
+        )
+      ),
+    ) %>%
+    arrange(desc(direction_consistency)) %>%
+    mutate(
+      label = sprintf("%.1f%%", percent),
+      ymax = cumsum(percent),
+      ymin = lag(ymax, default = 0),
+      midpoint = (ymax + ymin) / 2,
+      angle = 90 - 360 * midpoint / 100,
+      
+      # Position labels outside the pie
+      x_label = 1.65,
+      hjust = ifelse(angle < -90, 1, 0)
+    )
+  
+  ggplot(
+    plot_data,
+    aes(x = 1, y = percent, fill = direction_consistency)
+  ) +
+    
+    # Pie
+    geom_col(
+      width = 1,
+      color = "white",
+      linewidth = 0
+    ) +
+    
+    # Leader lines
+    geom_segment(
+      aes(
+        x = 1.5,
+        xend = x_label,
+        y = midpoint,
+        yend = midpoint
+      ),
+      linewidth = 0.1,
+      inherit.aes = FALSE
+    ) +
+    
+    # Percentage labels outside
+    geom_text(
+      aes(
+        x = x_label + ifelse(hjust == 0, 0.04, -0.04),
+        y = midpoint,
+        label = label,
+        hjust = hjust
+      ),
+      inherit.aes = FALSE,
+      size = pt_to_geom(6)
+    ) +
+    
+    coord_polar(theta = "y") +
+    
+    scale_fill_manual(
+      values = c(
+        "Always inactive" = "#d9f0a3",
+        "Active (positive)" = "#78c679",
+        "Active (negative)" = "#41ab5d",
+        "Direction switching" = "#006837"
+      )
+    ) +
+    
+    # Make space around the pie
+    xlim(0.5, 1.85) +
+    
+    labs(
+      fill = "Reaction class"
+    ) +
+    
+    theme_void() +
+    theme(
+      legend.title = element_text(size = 6),
+      legend.text = element_text(size = 6),
+      legend.position = "right"
+    ) 
+    # theme_tidy()
+}
+# p_iCHOv1 <- plot_class_pie("iCHOv1")
+# p_iCHO2441 <- plot_class_pie("iCHO2441")
+p_iCHO3K <- plot_class_pie("iCHO3K")
+
+# p_iCHOv1
+# p_iCHO2441
+p_iCHO3K
+
+
+ggsave(
+  filename = "figures/models/exp_constrained/reaction_activity_classes_iCHO3K_pie_legend.png",
+  width = 45,
+  height = 60,
+  units = "mm",
+  bg = "white",
+  dpi = 600
+)
+
+# # plot general landscape plots-----------------------
+
 
 # only filter iCHO3k
 # Keep only iCHO3K and exclude inactive class
@@ -167,6 +283,13 @@ example_rxns <- rxn_classes %>%
       "Direction switching"
     )
   ) %>%
+  mutate(
+    direction_consistency = recode(
+      direction_consistency,
+      "Always active (negative only)" = "Active (negative)",
+      "Always active (positive only)" = "Active (positive)"
+    )
+  ) %>%
   group_by(direction_consistency) %>%
   slice_head(n = 20) %>%
   ungroup()
@@ -187,27 +310,27 @@ example_flux <- flux_df %>%
     by = "Reaction"
   ) %>%
   mutate(
-    direction_consistency = recode(
-      direction_consistency,
-      "Always active (positive only)" = "Always positive",
-      "Always active (negative only)" = "Always negative",
-      "Direction switching" = "Direction switching"
-    ),
-    direction_consistency = factor(
-      direction_consistency,
-      levels = c(
-        "Always positive",
-        "Always negative",
-        "Direction switching"
-      )
-    ),
+  #   direction_consistency = recode(
+  #     direction_consistency,
+  #     "Always active (positive only)" = "Always positive",
+  #     "Always active (negative only)" = "Always negative",
+  #     "Direction switching" = "Direction switching"
+  #   ),
+    # direction_consistency = factor(
+    #   direction_consistency,
+    #   levels = c(
+    #     "Always positive",
+    #     "Always negative",
+    #     "Direction switching"
+    #   )
+    # ),
     Condition = ifelse(str_detect(Condition, "Constant"), "CT", "TS")
   )
   
 
 
 plot_data <- example_flux %>%
-  filter(Reaction == "ARTPLM2") %>% # "ACONTam" for positive, "NH4t3r" for direction switching, "ARTPLM2" for negative
+  filter(Reaction == "NH4t3r") %>% # "ACONTam" for positive, "NH4t3r" for direction switching, "ARTPLM2" for negative
   mutate(
     Window = factor(Window, levels = sort(unique(Window))),
     Condition = factor(
@@ -353,199 +476,193 @@ for(model in models) {
 
 
 # PCA plots ---------------------------------------------------------------
-pca_rxns <- rxn_classes %>%
-  filter(direction_consistency != "Always inactive") %>%
-  select(common_name, Reaction)
+# pca_rxns <- rxn_classes %>%
+#   filter(direction_consistency != "Always inactive") %>%
+#   select(common_name, Reaction)
+# 
+# pca_fluxes <- flux_df %>%
+#   mutate(
+#     common_name = recode(
+#       common_name,
+#       "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+#     )
+#   ) %>%
+#   inner_join(
+#     pca_rxns,
+#     by = c("common_name", "Reaction")
+#   )
+# 
+# 
+# flux_df_clean <- flux_df
+#   # mutate(
+#   #   common_name = recode(
+#   #     common_name,
+#   #     "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+#   #   )
+#   # )
+# 
+# # Create a list to store PCA results
+# pca_results <- list()
 
-pca_fluxes <- flux_df %>%
-  mutate(
-    common_name = recode(
-      common_name,
-      "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
-    )
-  ) %>%
-  inner_join(
-    pca_rxns,
-    by = c("common_name", "Reaction")
-  )
+# for(model in c("iCHO3K")) {
+#   
+#   message("Running PCA for: ", model)
+#   
+#   model_flux <- pca_fluxes %>%
+#     filter(common_name == model)
+#   
+#   pca_matrix <- model_flux %>%
+#     mutate(
+#       sample_id = paste(Condition, Window, sep = "_")
+#     ) %>%
+#     select(
+#       sample_id,
+#       Condition,
+#       Window,
+#       Reaction,
+#       pFBA_Flux
+#     ) %>%
+#     pivot_wider(
+#       id_cols = c(sample_id, Condition, Window),
+#       names_from = Reaction,
+#       values_from = pFBA_Flux,
+#       values_fill = 0
+#     )
+#   
+#   metadata <- pca_matrix %>%
+#     select(sample_id, Condition, Window)
+#   
+#   flux_mat <- pca_matrix %>%
+#     select(-sample_id, -Condition, -Window) %>%
+#     as.matrix()
+#   
+#   reaction_sd <- apply(flux_mat, 2, sd)
+#   
+#   flux_mat <- flux_mat[
+#     ,
+#     reaction_sd > 0 & !is.na(reaction_sd),
+#     drop = FALSE
+#   ]
+#   
+#   message("Reactions before variance filtering: ",
+#           length(reaction_sd))
+#   
+#   message("Reactions retained for PCA: ",
+#           ncol(flux_mat))
+#   
+#   pca_res <- prcomp(
+#     flux_mat,
+#     center = TRUE,
+#     scale. = TRUE
+#   )
+#   
+#   pca_df <- as.data.frame(pca_res$x) %>%
+#     bind_cols(metadata) %>%
+#     mutate(
+#       Model = model,
+#       Window = as.character(Window)
+#     )
+#   
+#   var_exp <- summary(pca_res)$importance[2, ] * 100
+#   
+#   pca_results[[model]] <- list(
+#     pca_df = pca_df,
+#     var_exp = var_exp,
+#     pca_res = pca_res
+#   )
+# }
+# 
+# # Combine all PCA dataframes
+# all_pca_df <- bind_rows(lapply(pca_results, function(x) x$pca_df))
+# 
+# # # Set the order of models
+# # all_pca_df <- all_pca_df %>%
+# #   mutate(Model = factor(Model, levels = c("iCHOv1", "iCHO2441", "iCHO3K")))
+# 
+# # Color mapping for conditions
+# color_mapping_condition <- c(
+#   "Constant" = "#E6641E",
+#   "Temp. shifted" = "#4B288C"
+# )
+# 
+# # # Create PCA plot
+# p_combined <- ggplot(
+#   all_pca_df,
+#   aes(x = PC1, y = PC2, color = Condition, shape = Window)
+# ) +
+#   geom_point(size = 3) +
+#   scale_color_manual(values = color_mapping_condition) +
+#   facet_wrap(~Model, scales = "free") +
+#   labs(
+#     x = "PC1",
+#     y = "PC2"
+#   ) +
+#   theme_bw() +
+#   theme(
+#     legend.position = "bottom",
+#     panel.grid.minor = element_blank(),
+#     axis.text = element_text(color = "black", size = 11),
+#     axis.title = element_text(color = "black", size = 11),
+#     strip.background = element_rect(fill = "lightgray"),
+#     strip.text = element_text(face = "bold", size = 11)
+#   )
+# 
+# plot(p_combined)
+# 
+# # Save the plot
+# ggsave("figures/models/exp_constrained/pca_combined_models.pdf", p_combined, width = 6.5, height = 3)
+
+# # Also create individual plots for each model with variance in titles
+# for(model in c("iCHO3K")) {
+#   if(model %in% names(pca_results)) {
+#     p_individual <- ggplot(
+#       pca_results[[model]]$pca_df,
+#       aes(x = PC1, y = PC2, color = Condition, shape = Window)
+#     ) +
+#       geom_point(size = 3) +
+#       scale_color_manual(values = color_mapping_condition) +
+#       labs(
+#         title = paste0(model, "\n(PC1: ", round(pca_results[[model]]$var_exp[1], 1), "%, PC2: ", round(pca_results[[model]]$var_exp[2], 1), "%)"),
+#         x = paste0("PC1 (", round(pca_results[[model]]$var_exp[1], 1), "%)"),
+#         y = paste0("PC2 (", round(pca_results[[model]]$var_exp[2], 1), "%)")
+#       ) +
+#       # theme_bw() +
+#       theme_tidy() +
+#       theme(
+#         legend.position = "bottom",
+#         # panel.grid.minor = element_blank(),
+#         # axis.text = element_text(color = "black", size = 11),
+#         # axis.title = element_text(color = "black", size = 11),
+#         # plot.title = element_text(hjust = 0.5, face = "bold", size = 11)
+#       ) +
+#       guides(
+#         color = "none",
+#         shape = "none"
+#       )
+#     
+#     # Save individual plot
+# 
+#     
+#     plot(p_individual)
+#   }
+# }
+# 
+# ggsave("figures/models/exp_constrained/pca_iCHO3k.png", 
+#        p_individual, width = 2, height = 2)
 
 
-flux_df_clean <- flux_df
-  # mutate(
-  #   common_name = recode(
-  #     common_name,
-  #     "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
-  #   )
-  # )
-
-# Create a list to store PCA results
-pca_results <- list()
-
-for(model in c("iCHO3K")) {
-  
-  message("Running PCA for: ", model)
-  
-  model_flux <- pca_fluxes %>%
-    filter(common_name == model)
-  
-  pca_matrix <- model_flux %>%
-    mutate(
-      sample_id = paste(Condition, Window, sep = "_")
-    ) %>%
-    select(
-      sample_id,
-      Condition,
-      Window,
-      Reaction,
-      pFBA_Flux
-    ) %>%
-    pivot_wider(
-      id_cols = c(sample_id, Condition, Window),
-      names_from = Reaction,
-      values_from = pFBA_Flux,
-      values_fill = 0
-    )
-  
-  metadata <- pca_matrix %>%
-    select(sample_id, Condition, Window)
-  
-  flux_mat <- pca_matrix %>%
-    select(-sample_id, -Condition, -Window) %>%
-    as.matrix()
-  
-  reaction_sd <- apply(flux_mat, 2, sd)
-  
-  flux_mat <- flux_mat[
-    ,
-    reaction_sd > 0 & !is.na(reaction_sd),
-    drop = FALSE
-  ]
-  
-  message("Reactions before variance filtering: ",
-          length(reaction_sd))
-  
-  message("Reactions retained for PCA: ",
-          ncol(flux_mat))
-  
-  pca_res <- prcomp(
-    flux_mat,
-    center = TRUE,
-    scale. = TRUE
-  )
-  
-  pca_df <- as.data.frame(pca_res$x) %>%
-    bind_cols(metadata) %>%
-    mutate(
-      Model = model,
-      Window = as.character(Window)
-    )
-  
-  var_exp <- summary(pca_res)$importance[2, ] * 100
-  
-  pca_results[[model]] <- list(
-    pca_df = pca_df,
-    var_exp = var_exp,
-    pca_res = pca_res
-  )
-}
-
-# Combine all PCA dataframes
-all_pca_df <- bind_rows(lapply(pca_results, function(x) x$pca_df))
-
-# # Set the order of models
-# all_pca_df <- all_pca_df %>%
-#   mutate(Model = factor(Model, levels = c("iCHOv1", "iCHO2441", "iCHO3K")))
-
-# Color mapping for conditions
-color_mapping_condition <- c(
-  "Constant" = "#E6641E",
-  "Temp. shifted" = "#4B288C"
-)
-
-# # Create PCA plot
-p_combined <- ggplot(
-  all_pca_df,
-  aes(x = PC1, y = PC2, color = Condition, shape = Window)
-) +
-  geom_point(size = 3) +
-  scale_color_manual(values = color_mapping_condition) +
-  facet_wrap(~Model, scales = "free") +
-  labs(
-    x = "PC1",
-    y = "PC2"
-  ) +
-  theme_bw() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.minor = element_blank(),
-    axis.text = element_text(color = "black", size = 11),
-    axis.title = element_text(color = "black", size = 11),
-    strip.background = element_rect(fill = "lightgray"),
-    strip.text = element_text(face = "bold", size = 11)
-  )
-
-plot(p_combined)
-
-# Save the plot
-ggsave("figures/models/exp_constrained/pca_combined_models.pdf", p_combined, width = 6.5, height = 3)
-
-# Also create individual plots for each model with variance in titles
-for(model in c("iCHO3K")) {
-  if(model %in% names(pca_results)) {
-    p_individual <- ggplot(
-      pca_results[[model]]$pca_df,
-      aes(x = PC1, y = PC2, color = Condition, shape = Window)
-    ) +
-      geom_point(size = 3) +
-      scale_color_manual(values = color_mapping_condition) +
-      labs(
-        title = paste0(model, "\n(PC1: ", round(pca_results[[model]]$var_exp[1], 1), "%, PC2: ", round(pca_results[[model]]$var_exp[2], 1), "%)"),
-        x = paste0("PC1 (", round(pca_results[[model]]$var_exp[1], 1), "%)"),
-        y = paste0("PC2 (", round(pca_results[[model]]$var_exp[2], 1), "%)")
-      ) +
-      # theme_bw() +
-      theme_tidy() +
-      theme(
-        legend.position = "bottom",
-        # panel.grid.minor = element_blank(),
-        # axis.text = element_text(color = "black", size = 11),
-        # axis.title = element_text(color = "black", size = 11),
-        # plot.title = element_text(hjust = 0.5, face = "bold", size = 11)
-      ) +
-      guides(
-        color = "none",
-        shape = "none"
-      )
-    
-    # Save individual plot
-
-    
-    plot(p_individual)
-  }
-}
-
-ggsave("figures/models/exp_constrained/pca_iCHO3k.png", 
-       p_individual, width = 2, height = 2)
-
-
-# ==============================================================================
+##
 # PCA of pFBA fluxes
 # Model: iCHO3K
-# ==============================================================================
-
-
-# ------------------------------------------------------------------------------
 # 1. Prepare reactions for PCA
-# ------------------------------------------------------------------------------
+
 
 pca_rxns <- rxn_classes %>%
   filter(direction_consistency != "Always inactive") %>%
   select(common_name, Reaction)
 
-
-# ------------------------------------------------------------------------------
 # 2. Prepare flux data
-# ------------------------------------------------------------------------------
+
 
 pca_fluxes <- flux_df %>%
   mutate(
@@ -559,10 +676,7 @@ pca_fluxes <- flux_df %>%
     by = c("common_name", "Reaction")
   )
 
-
-# ------------------------------------------------------------------------------
 # 3. Run PCA
-# ------------------------------------------------------------------------------
 
 pca_results <- list()
 
@@ -663,9 +777,8 @@ for (model in c("iCHO3K")) {
 }
 
 
-# ------------------------------------------------------------------------------
 # 4. Combine PCA results
-# ------------------------------------------------------------------------------
+
 
 all_pca_df <- bind_rows(
   lapply(
@@ -675,9 +788,7 @@ all_pca_df <- bind_rows(
 )
 
 
-# ------------------------------------------------------------------------------
 # 5. PCA plot
-# ------------------------------------------------------------------------------
 
 color_mapping_condition <- c(
   "Constant" = "#E6641E",
@@ -739,9 +850,7 @@ ggsave(
 )
 
 
-# ------------------------------------------------------------------------------
 # 6. Individual PCA plot
-# ------------------------------------------------------------------------------
 
 for (model in c("iCHO3K")) {
   
@@ -802,14 +911,10 @@ ggsave(
 )
 
 
-# ==============================================================================
 # OUTLIER ANALYSIS
-# ==============================================================================
 
 
-# ------------------------------------------------------------------------------
 # 7. Identify Constant, Window 2
-# ------------------------------------------------------------------------------
 
 outlier_sample <- all_pca_df %>%
   filter(
@@ -828,9 +933,7 @@ outlier_sample <- all_pca_df %>%
 outlier_sample
 
 
-# ------------------------------------------------------------------------------
 # 8. Extract exact PCA objects
-# ------------------------------------------------------------------------------
 
 pca_res <- pca_results[["iCHO3K"]]$pca_res
 
@@ -841,18 +944,16 @@ flux_scaled <- pca_results[["iCHO3K"]]$flux_scaled
 metadata <- pca_results[["iCHO3K"]]$metadata
 
 
-# ------------------------------------------------------------------------------
 # 9. Identify Constant_2
-# ------------------------------------------------------------------------------
 
 constant2_index <- which(
   metadata$sample_id == "Constant_2"
 )
 
 
-# ------------------------------------------------------------------------------
+
 # 10. Calculate reaction-level contributions to Constant_2 PC2
-# ------------------------------------------------------------------------------
+
 
 constant2_PC2 <- tibble(
   Reaction = colnames(flux_scaled),
@@ -866,9 +967,8 @@ constant2_PC2 <- tibble(
   )
 
 
-# ------------------------------------------------------------------------------
 # 11. Verify that reaction contributions reconstruct the PCA score
-# ------------------------------------------------------------------------------
+
 
 constant2_PC2_check <- constant2_PC2 %>%
   summarise(
@@ -900,9 +1000,9 @@ constant2_PC2_check <- constant2_PC2 %>%
 constant2_PC2_check
 
 
-# ------------------------------------------------------------------------------
+
 # 12. Inspect the strongest PC2 contributions
-# ------------------------------------------------------------------------------
+
 
 top_PC2_contributions <- constant2_PC2 %>%
   mutate(
@@ -924,9 +1024,9 @@ top_PC2_contributions %>%
   slice_head(n = 30)
 
 
-# ------------------------------------------------------------------------------
+
 # 13. Examine how concentrated the PC2 contribution is
-# ------------------------------------------------------------------------------
+
 
 PC2_concentration <- constant2_PC2 %>%
   filter(
@@ -992,14 +1092,11 @@ PC2_concentration %>%
   )
 
 
-# ==============================================================================
+
 # CHARACTERIZING THE FLUX DIFFERENCES
-# ==============================================================================
 
-
-# ------------------------------------------------------------------------------
 # 14. Convert PCA matrix back to long format
-# ------------------------------------------------------------------------------
+
 
 pca_flux <- as.data.frame(
   flux_mat
@@ -1012,9 +1109,9 @@ pca_flux <- as.data.frame(
   )
 
 
-# ------------------------------------------------------------------------------
+
 # 15. Compare Constant_2 against all other samples
-# ------------------------------------------------------------------------------
+
 
 constant2_vs_rest <- pca_flux %>%
   pivot_longer(
@@ -1058,9 +1155,9 @@ constant2_vs_rest <- pca_flux %>%
   )
 
 
-# ------------------------------------------------------------------------------
+
 # 16. Classify the type of flux difference
-# ------------------------------------------------------------------------------
+
 
 constant2_patterns <- constant2_vs_rest %>%
   mutate(
@@ -1085,9 +1182,9 @@ constant2_patterns %>%
   count(pattern)
 
 
-# ------------------------------------------------------------------------------
+
 # 17. Largest actual flux differences
-# ------------------------------------------------------------------------------
+
 
 constant2_vs_rest %>%
   arrange(
@@ -1096,9 +1193,9 @@ constant2_vs_rest %>%
   slice_head(n = 30)
 
 
-# ------------------------------------------------------------------------------
+
 # 18. Reactions uniquely active in Constant_2
-# ------------------------------------------------------------------------------
+
 
 constant2_patterns %>%
   filter(
@@ -1109,9 +1206,9 @@ constant2_patterns %>%
   )
 
 
-# ------------------------------------------------------------------------------
+
 # 19. Reactions absent specifically in Constant_2
-# ------------------------------------------------------------------------------
+
 
 constant2_patterns %>%
   filter(
@@ -1122,34 +1219,34 @@ constant2_patterns %>%
   ) %>%
   slice_head(n = 50)
 
+# 
 
-# ==============================================================================
-# OPTIONAL: SPECIFIC REACTIONS IDENTIFIED DURING EXPLORATION
-# ==============================================================================
+# # OPTIONAL: SPECIFIC REACTIONS IDENTIFIED DURING EXPLORATION
+
+# 
+# 
+# # These were previously identified as uniquely active in Constant_2.
+# # Keep this section only if you want to explicitly inspect them.
+# 
+# key_reactions <- c(
+#   "HMR_1526",
+#   "RE2410C",
+#   "r1562"
+# )
+# 
+# key_fluxes <- pca_flux %>%
+#   select(
+#     sample_id,
+#     all_of(key_reactions)
+#   )
+# 
+# key_fluxes
+# 
 
 
-# These were previously identified as uniquely active in Constant_2.
-# Keep this section only if you want to explicitly inspect them.
 
-key_reactions <- c(
-  "HMR_1526",
-  "RE2410C",
-  "r1562"
-)
-
-key_fluxes <- pca_flux %>%
-  select(
-    sample_id,
-    all_of(key_reactions)
-  )
-
-key_fluxes
-
-
-
-# ------------------------------------------------------------
 # Re-run PCA excluding Constant_2
-# ------------------------------------------------------------
+
 
 # Original PCA objects
 pca_res_original <- pca_results[["iCHO3K"]]$pca_res
@@ -1157,13 +1254,13 @@ flux_mat_original <- pca_results[["iCHO3K"]]$flux_mat
 metadata_original <- pca_results[["iCHO3K"]]$metadata
 
 
-# ------------------------------------------------------------
+
 # 1. Remove Constant_2
-# ------------------------------------------------------------
+
 
 keep_samples <- (
   metadata_original$sample_id != "Constant_2" &
-    metadata_original$sample_id != "Temp. shifted_4"
+  metadata_original$sample_id != "Temp. shifted_4" # next one which looks like 'outlier'
 )
 
 flux_mat_no_C2 <- flux_mat_original[
@@ -1179,9 +1276,9 @@ metadata_no_C2 <- metadata_original[
 ]
 
 
-# ------------------------------------------------------------
+
 # 2. Recalculate reaction variance
-# ------------------------------------------------------------
+
 # Some reactions may become constant after removing
 # Constant_2, so we need to remove them before PCA.
 
@@ -1196,17 +1293,15 @@ keep_reactions_no_C2 <- (
     !is.na(reaction_sd_no_C2)
 )
 
-
-# ------------------------------------------------------------ # 2a. Count reactions removed due to zero variance # ------------------------------------------------------------ 
+# 2a. Count reactions removed due to zero variance # 
 n_removed_no_C2 <- sum( !keep_reactions_no_C2 ) 
 n_retained_no_C2 <- sum( keep_reactions_no_C2 ) 
 cat( "Reactions before filtering:", ncol(flux_mat_no_C2), "\n" ) 
 cat( "Reactions removed due to zero variance:", n_removed_no_C2, "\n" ) 
 cat( "Reactions retained:", n_retained_no_C2, "\n" )
 
-# ------------------------------------------------------------
 # 3. Filter zero-variance reactions
-# ------------------------------------------------------------
+
 
 flux_mat_no_C2_filtered <- flux_mat_no_C2[
   ,
@@ -1215,9 +1310,9 @@ flux_mat_no_C2_filtered <- flux_mat_no_C2[
 ]
 
 
-# ------------------------------------------------------------
+
 # 4. Run PCA
-# ------------------------------------------------------------
+
 
 pca_res_no_C2 <- prcomp(
   flux_mat_no_C2_filtered,
@@ -1226,9 +1321,9 @@ pca_res_no_C2 <- prcomp(
 )
 
 
-# ------------------------------------------------------------
+
 # 5. Extract PCA scores
-# ------------------------------------------------------------
+
 
 pca_df_no_C2 <- as.data.frame(
   pca_res_no_C2$x
@@ -1239,27 +1334,27 @@ pca_df_no_C2 <- as.data.frame(
   mutate( Window = as.character(Window) )
 
 
-# ------------------------------------------------------------
+
 # 6. Calculate variance explained
-# ------------------------------------------------------------
+
 
 var_exp_no_C2 <- (
   summary(pca_res_no_C2)$importance[2, ]
 ) * 100
 
 
-# ------------------------------------------------------------
+
 # 7. Check the results
-# ------------------------------------------------------------
+
 
 pca_df_no_C2
 
 var_exp_no_C2[1:5]
 
 
-# ------------------------------------------------------------
+
 # 8. Plot PCA without Constant_2
-# ------------------------------------------------------------
+
 
 ggplot(
   pca_df_no_C2,
@@ -1274,11 +1369,25 @@ ggplot(
   geom_point(
     size = 4
   ) +
-  geom_text(
-    vjust = -1,
-    size = 3
+  labs(
+    x = paste0(
+      "PC1 (",
+      round(var_exp_no_C2[1], 1),
+      "%)"
+    ),
+    y = paste0(
+      "PC2 (",
+      round(var_exp_no_C2[2], 1),
+      "%)"
+    )
   ) +
-  theme_classic() +
+  # geom_text(
+  #   vjust = -1,
+  #   size = 3
+  # ) +
+  scale_color_manual(
+    values = color_mapping_condition
+  ) +
   labs(
     title = "PCA of pFBA fluxes excluding Constant_2",
     x = paste0(
@@ -1291,12 +1400,22 @@ ggplot(
       round(var_exp_no_C2[2], 1),
       "%)"
     )
-  )
+  ) +
+  theme_tidy() +
+  theme(
+    legend.position = "bottom"
+  ) 
+    
+ggsave(
+  "figures/models/exp_constrained/pca_iCHO3k_wo_CT_w2.png",
+  width = 6,
+  height = 5,
+  bg= "white"
+)
 
 
-# ------------------------------------------------------------
 # 9. Compare variance explained with original PCA
-# ------------------------------------------------------------
+
 
 variance_comparison <- tibble(
   PC = paste0("PC", 1:5),
@@ -1306,6 +1425,8 @@ variance_comparison <- tibble(
 
 variance_comparison
 
+
+#----Calculate pair-wise Spearmann correlations and plot as heatmap ------------------------
 
 
 
@@ -1565,10 +1686,8 @@ model_traj_summary <- list()
 #            p_slopes, width = 10, height = 8, limitsize = FALSE)
 #   }
 # }
-# ============================================================
-# ADD NEW CLASSIFICATIONS FOR STABLE REACTIONS
-# ============================================================
 
+# ADD NEW CLASSIFICATIONS FOR STABLE REACTIONS --------------------
 # Calculate stability metrics from the original flux data
 stability_classification <- active_fluxes %>%
   group_by(common_name, Reaction, Condition) %>%
@@ -1770,9 +1889,9 @@ ggsave(
 
 # 27.08.2026-------------
 
-# ============================================================
+
 # REACTION-LEVEL TEMPORAL DYNAMICS
-# ============================================================
+
 #
 # Input:
 #   active_fluxes
@@ -1791,12 +1910,10 @@ ggsave(
 #   Transient
 #   Other
 #
-# ============================================================
 
 
-# ------------------------------------------------------------
 # 1. Calculate trajectory features
-# ------------------------------------------------------------
+
 
 traj_features <- pca_fluxes %>%
   
@@ -1845,9 +1962,9 @@ traj_features <- pca_fluxes %>%
   )
 
 
-# ------------------------------------------------------------
+
 # 2. Calculate travel ratio
-# ------------------------------------------------------------
+
 #
 # Approximately 1:
 #   mostly monotonic trajectory
@@ -1858,7 +1975,7 @@ traj_features <- pca_fluxes %>%
 # >= 2:
 #   strongly non-monotonic / transient behavior
 #
-# ------------------------------------------------------------
+
 
 traj_features <- traj_features %>%
   mutate(
@@ -1870,9 +1987,9 @@ traj_features <- traj_features %>%
   )
 
 
-# ------------------------------------------------------------
+
 # 3. Define trajectory thresholds
-# ------------------------------------------------------------
+
 
 # Flux range below this value is considered effectively constant.
 # Adjust if necessary according to the numerical precision/scale
@@ -1887,9 +2004,9 @@ flux_stability_thresh <- 1e-6
 slope_thresh <- 0.01
 
 
-# ------------------------------------------------------------
+
 # 4. Classify trajectories
-# ------------------------------------------------------------
+
 
 traj_features <- traj_features %>%
   mutate(
@@ -1921,9 +2038,9 @@ traj_features <- traj_features %>%
   )
 
 
-# ------------------------------------------------------------
+
 # 5. Check trajectory counts
-# ------------------------------------------------------------
+
 
 traj_features %>%
   count(
@@ -1939,9 +2056,9 @@ traj_features %>%
   print()
 
 
-# ============================================================
+
 # 6. Summarise trajectory classes by model and condition
-# ============================================================
+
 
 traj_class_summary <- traj_features %>%
   
@@ -1976,9 +2093,9 @@ traj_class_summary <- traj_features %>%
   )
 
 
-# ============================================================
+
 # 7. iCHO3K trajectory summary
-# ============================================================
+
 
 traj_class_summary_iCHO3K <- traj_class_summary %>%
   filter(
@@ -1986,9 +2103,9 @@ traj_class_summary_iCHO3K <- traj_class_summary %>%
   )
 
 
-# ------------------------------------------------------------
+
 # 8. Plot trajectory classes separately for CT and TS
-# ------------------------------------------------------------
+
 # Bar plot settings
 PLOT_FONT_SIZE  <- 6 # was 6 for paper figures
 PANEL_LABEL_SIZE <- 6 # was 8 for paper figures
@@ -2073,9 +2190,9 @@ p_traj_classes <- ggplot(
 plot(p_traj_classes)
 
 
-# ------------------------------------------------------------
+
 # Save trajectory-class plot
-# ------------------------------------------------------------
+
 
 ggsave(
   "figures/models/exp_constrained/trajectory_classes_iCHO3K_new.png",
@@ -2087,9 +2204,9 @@ ggsave(
 )
 
 
-# ============================================================
+
 # 9. Compare trajectory behavior between CT and TS
-# ============================================================
+
 #
 # For each reaction, determine whether its trajectory class
 # is the same or different between conditions.
@@ -2106,7 +2223,7 @@ ggsave(
 #   TS = Increasing
 #   -> Different
 #
-# ============================================================
+
 
 trajectory_comparison <- traj_features %>%
   
@@ -2123,9 +2240,9 @@ trajectory_comparison <- traj_features %>%
   )
 
 
-# ------------------------------------------------------------
+
 # 10. Identify whether CT and TS have the same trajectory
-# ------------------------------------------------------------
+
 
 # This assumes the condition names are "CT" and "TS".
 
@@ -2143,9 +2260,9 @@ trajectory_comparison <- trajectory_comparison %>%
   )
 
 
-# ------------------------------------------------------------
+
 # 11. Count same vs different trajectories
-# ------------------------------------------------------------
+
 
 trajectory_comparison %>%
   count(
@@ -2159,9 +2276,9 @@ trajectory_comparison %>%
   print()
 
 
-# ============================================================
+
 # 12. Detailed CT vs TS trajectory combinations
-# ============================================================
+
 #
 # This tells us exactly how reactions change their trajectory
 # behavior between conditions.
@@ -2172,7 +2289,7 @@ trajectory_comparison %>%
 # Increasing  -> Transient
 # Decreasing  -> Stable
 #
-# ============================================================
+
 
 trajectory_comparison %>%
   count(
@@ -2187,9 +2304,9 @@ trajectory_comparison %>%
   print()
 
 
-# ============================================================
+
 # 13. iCHO3K: same vs different trajectory
-# ============================================================
+
 
 trajectory_comparison_iCHO3K <- trajectory_comparison %>%
   filter(
@@ -2204,9 +2321,8 @@ trajectory_comparison_iCHO3K %>%
   print()
 
 
-# ============================================================
+
 # 14. Plot same vs different trajectories
-# ============================================================
 
 trajectory_response_summary <- trajectory_comparison_iCHO3K %>%
   count(
@@ -2262,9 +2378,9 @@ p_trajectory_response <- ggplot(
 plot(p_trajectory_response)
 
 
-# ------------------------------------------------------------
+
 # Save
-# ------------------------------------------------------------
+
 
 ggsave(
   "figures/models/exp_constrained/trajectory_response_CT_vs_TS_iCHO3K.pdf",
@@ -2275,9 +2391,9 @@ ggsave(
 )
 
 
-# ============================================================
+
 # 15. Save detailed trajectory tables
-# ============================================================
+
 
 write_csv(
   traj_features,
