@@ -10,12 +10,12 @@ from pathlib import Path
 cobra.Configuration().solver = "glpk"
 
 # %% Section 1: Load models
-MODELS_DIR = get_models_dir(mode="GIMME_tpm_25perc")
+MODELS_DIR = get_models_dir(mode="exp_constrained")
 models, summary_df = load_models(MODELS_DIR)
 
 #%% # Project root is two levels up from python/
 PROJECT_ROOT = Path.cwd()
-SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "GIMME_tpm_25perc"
+SAVE_FOLDER = PROJECT_ROOT / "analysis" / "models" / "exp_constrained_ngam"
 SAVE_FOLDER.mkdir(parents=True, exist_ok=True)
 print(f"Analysis will be saved to: {SAVE_FOLDER}")
 
@@ -45,7 +45,15 @@ igg_reactions = {
     "iCHOv1": "DM_igg_g"
 }
 
+ngam_reactions = {
+    "iCHO3K_cho_prod_generic_unblocked": "ATPM",
+    "iCHO2441": "DM_atp[c]",
+    "iCHOv1": "ATPM"
+}
 
+# %% Define bounds for energy maintenance reaction
+NGAM_MEAN = 4.3
+NGAM_SD   = 1.7
 # %%
 # def parse_condition_window(model_name: str):
 #     """
@@ -172,6 +180,22 @@ for model_name, base_model in models.items():
             reaction_data_fba[model_name][ex][w][rxn_id]['UB'] = picked[1]
             reaction_data_pfba[model_name][ex][w][rxn_id]['LB'] = picked[0]
             reaction_data_pfba[model_name][ex][w][rxn_id]['UB'] = picked[1]
+
+        # --- Apply NGAM constraint ---
+        if common_name in ngam_reactions:
+            ngam_id = ngam_reactions[common_name]
+            if ngam_id in model.reactions:
+                ngam_rxn = model.reactions.get_by_id(ngam_id)
+                ngam_lb, ngam_ub = sorted([NGAM_MEAN - NGAM_SD, NGAM_MEAN + NGAM_SD])
+                ngam_rxn.bounds = (ngam_lb, ngam_ub)
+                print(f"    🔧 NGAM {ngam_id} bounded to [{ngam_lb}, {ngam_ub}]")
+
+                reaction_data_fba[model_name][ex][w][ngam_id]['LB'] = ngam_lb
+                reaction_data_fba[model_name][ex][w][ngam_id]['UB'] = ngam_ub
+                reaction_data_pfba[model_name][ex][w][ngam_id]['LB'] = ngam_lb
+                reaction_data_pfba[model_name][ex][w][ngam_id]['UB'] = ngam_ub
+            else:
+                print(f"⚠️ NGAM reaction {ngam_id} not in {model_name}")
 
         # Objective
         biomass_rxn = biomass_reactions[common_name]
