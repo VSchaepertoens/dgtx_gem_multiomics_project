@@ -92,10 +92,11 @@ plot_class_pie <- function(model_name) {
       direction_consistency = factor(
         direction_consistency,
         levels = c(
-          "Direction switching",
+          
           "Always inactive",
           "Active (positive)",
-          "Active (negative)"
+          "Active (negative)",
+          "Direction switching"
         )
       ),
     ) %>%
@@ -152,7 +153,7 @@ plot_class_pie <- function(model_name) {
     
     scale_fill_manual(
       values = c(
-        "Always inactive" = "#d9f0a3",
+        "Always inactive" = "#BDBDBD",
         "Active (positive)" = "#78c679",
         "Active (negative)" = "#41ab5d",
         "Direction switching" = "#006837"
@@ -1428,8 +1429,7 @@ variance_comparison
 
 #----Calculate pair-wise Spearmann correlations and plot as heatmap ------------------------
 
-
-# --- Reuse the same reaction set as your PCA, filtered to iCHO3K 
+# --- Reuse the same reaction set as your PCA, filtered to iCHO3K
 pca_rxns <- rxn_classes %>%
   filter(
     direction_consistency != "Always inactive",
@@ -1438,11 +1438,14 @@ pca_rxns <- rxn_classes %>%
   select(Reaction) %>%
   pull()
 
-# --- Flux matrix (samples x reactions) for iCHO3K only 
+
+# --- Flux matrix (samples x reactions) for iCHO3K only
 sample_mat <- flux_df %>%
   filter(common_name == "iCHO3K_cho_prod_generic_unblocked") %>%
   filter(Reaction %in% pca_rxns) %>%
-  mutate(sample_id = paste(Condition, Window, sep = "_")) %>%
+  mutate(
+    sample_id = paste(Condition, Window, sep = "_")
+  ) %>%
   select(sample_id, Reaction, pFBA_Flux) %>%
   pivot_wider(
     names_from  = Reaction,
@@ -1452,107 +1455,266 @@ sample_mat <- flux_df %>%
   column_to_rownames("sample_id") %>%
   as.matrix()
 
-cat("samples:", nrow(sample_mat), " reactions:", ncol(sample_mat), "\n")
+cat(
+  "samples:", nrow(sample_mat),
+  " reactions:", ncol(sample_mat), "\n"
+)
 
-# Drop all-zero reactions (they only add shared zeros to Spearman)
+
+# --- Drop all-zero reactions
+#     (they only add shared zeros to Spearman)
 keep <- colSums(sample_mat != 0) > 0
-sample_mat <- sample_mat[, keep, drop = FALSE]
-cat("kept reactions:", ncol(sample_mat), "\n")
+
+sample_mat <- sample_mat[
+  ,
+  keep,
+  drop = FALSE
+]
+
+cat(
+  "kept reactions:", ncol(sample_mat), "\n"
+)
+
+
+# Paired CT/TS Spearman correlation
+
+# 1. Spearman correlation between samples
+
 
 # --- Spearman correlation between samples ---
-cor_mat <- cor(t(sample_mat), method = "spearman", use = "pairwise.complete.obs")
+cor_mat <- cor(
+  t(sample_mat),
+  method = "spearman",
+  use = "pairwise.complete.obs"
+)
+
+# Rename samples in cor_mat: Constant -> CT, Temp. shifted -> TS
+new_names <- rownames(cor_mat) %>%
+  gsub("^Constant_", "CT_", .) %>%
+  gsub("^Temp\\. shifted_", "TS_", .)
+
+rownames(cor_mat) <- new_names
+colnames(cor_mat) <- new_names
+
+cat(
+  "samples:", nrow(sample_mat),
+  " reactions:", ncol(sample_mat), "\n"
+)
+
 print(round(cor_mat, 3))
 
-# --- Metadata aligned to cor_mat order ---
-meta <- tibble(sample_id = rownames(cor_mat)) %>%
-  separate(sample_id, into = c("Condition", "Window"), sep = "_", remove = FALSE) %>%
-  mutate(
-    Condition = recode(Condition,
-                       "Constant"      = "CT",
-                       "Temp. shifted" = "TS"
-    ),
-    Window = factor(Window, levels = sort(unique(as.numeric(Window))))
-  )
-stopifnot(all(meta$sample_id == rownames(cor_mat)))
-stopifnot(all(meta$sample_id == colnames(cor_mat)))
 
+
+# 2. Metadata aligned to cor_mat
+
+
+meta <- tibble(sample_id = rownames(cor_mat)) %>%
+  separate(
+    sample_id,
+    into = c("Condition", "Window"),
+    sep = "_",
+    remove = FALSE
+  ) %>%
+  mutate(
+    Condition = factor(Condition, levels = c("CT", "TS")),
+    Window = factor(
+      Window,
+      levels = sort(unique(as.numeric(Window)))
+    )
+  )
+
+
+
+# 3. Order samples:
+#
+#    CT_1
+#    TS_1
+#    CT_2
+#    TS_2
+#    ...
+
+
+meta <- meta %>%
+  arrange(Window, Condition)
+
+sample_order <- meta$sample_id
+
+
+
+# 4. Reorder correlation matrix
+
+
+cor_mat <- cor_mat[
+  sample_order,
+  sample_order,
+  drop = FALSE
+]
+
+
+# Check alignment
+stopifnot(
+  all(meta$sample_id == rownames(cor_mat)),
+  all(meta$sample_id == colnames(cor_mat))
+)
+
+print(
+  meta %>%
+    select(sample_id, Condition, Window)
+)
+
+
+
+# 5. Fixed colours
+
+
+condition_col <- c(
+  "CT" = "#E6641E",
+  "TS" = "#4B288C"
+)
+
+
+# Fixed window colours.
+# The colours remain consistent across figures.
+window_col <- c(
+  "1" = "#D9EAF7",
+  "2" = "#C7E9C0",
+  "3" = "#FDD0A2",
+  "4" = "#DADAEB",
+  "5" = "#F2F0F7"
+)
+
+# Keep only windows actually present
+window_col <- window_col[
+  names(window_col) %in% as.character(unique(meta$Window))
+]
+
+
+
+# 6. Heatmap annotations
+
+ht_opt$simple_anno_size <- unit(1.5, "mm")
 
 top_ha <- HeatmapAnnotation(
+  
   Condition = meta$Condition,
-  Window    = meta$Window,
-  col = list(
-    Condition = c("CT" = "#E6641E", "TS" = "#4B288C"),
-    Window    = setNames(
-      circlize::rand_color(length(levels(meta$Window)), luminosity = "light"),
-      levels(meta$Window)
-    )
+  
+  Window = factor(
+    meta$Window,
+    levels = sort(unique(meta$Window))
   ),
-  annotation_name_gp = gpar(fontsize = 6),
+  
+  col = list(
+    Condition = condition_col,
+    Window = window_col
+  ),
+  
+  annotation_name_gp = gpar(
+    fontsize = 6
+  ),
+  
   annotation_legend_param = list(
-    title_gp  = gpar(fontsize = 6),
-    labels_gp = gpar(fontsize = 6)
+    
+    Condition = list(
+      title_gp = gpar(fontsize = 6),
+      labels_gp = gpar(fontsize = 6)
+    ),
+    
+    Window = list(
+      title_gp = gpar(fontsize = 6),
+      labels_gp = gpar(fontsize = 6)
+    )
   )
 )
 
 
+
+# 7. Correlation heatmap
+
 ht <- Heatmap(
+  
   cor_mat,
-  name = "Spearman\nρ",
-  col  = colorRamp2(c(0.5, 0.75, 1), c("white", "#fddbc7", "#b2182b")),
-  top_annotation   = top_ha,
-  left_annotation  = rowAnnotation(
-    Condition = meta$Condition,
-    col = list(Condition = c("CT" = "#E6641E", "TS" = "#4B288C")),
-    show_legend = FALSE
+  
+  name = "Spearman\n\u03c1",
+  
+  col = colorRamp2(
+    c(0.5, 0.75, 1),
+    c(
+      "white",
+      "#F4A582",
+      "#B2182B"
+    )
   ),
-  show_row_names    = TRUE,
+  
+  top_annotation = top_ha,
+  
+  # ----------------------------------------------------------
+  # Text
+  # ----------------------------------------------------------
+  
+  show_row_names = TRUE,
   show_column_names = TRUE,
-  row_names_gp    = gpar(fontsize = 5),
-  column_names_gp = gpar(fontsize = 5),
-  column_title    = "Sample-wise Spearman correlation — iCHO3K",
-  column_title_gp = gpar(fontsize = 8, fontface = "bold"),
-  cluster_rows    = TRUE,
-  cluster_columns = TRUE,
-  clustering_method_rows    = "ward.D2",
-  clustering_method_columns = "ward.D2",
-  clustering_distance_rows    = "euclidean",
-  clustering_distance_columns = "euclidean",
-  row_split    = meta$Condition,
-  column_split = meta$Condition
+  
+  row_names_gp = gpar(
+    fontsize = 6
+  ),
+  
+  column_names_gp = gpar(
+    fontsize = 6
+  ),
+  
+  heatmap_legend_param = list(
+    title_gp = gpar(fontsize = 6),
+    labels_gp = gpar(fontsize = 6)
+  ),
+  
+  # ----------------------------------------------------------
+  # Split heatmap by WINDOW
+  # ----------------------------------------------------------
+  
+  row_split = factor(
+    meta$Window,
+    levels = sort(unique(meta$Window))
+  ),
+  
+  column_split = factor(
+    meta$Window,
+    levels = sort(unique(meta$Window))
+  ),
+  
+  # Remove the "1", "2", "3", ... split labels
+  row_title = NULL,
+  column_title = NULL,
+  
+  # Preserve CT/TS order
+  cluster_rows = FALSE,
+  cluster_columns = FALSE,
+  
+  border = TRUE
 )
 
-draw(ht)
 
-##
-mdl <- "iCHO3K"
 
-pca_fluxes_mdl <- pca_fluxes %>% filter(common_name == mdl)
-
-sample_mat_mdl <- pca_fluxes_mdl %>%
-  mutate(sample_id = paste(Condition, Window, sep = "_")) %>%
-  select(sample_id, Reaction, pFBA_Flux) %>%
-  pivot_wider(names_from = Reaction, values_from = pFBA_Flux, values_fill = 0) %>%
-  column_to_rownames("sample_id") %>%
-  as.matrix()
-
-cat("samples:", nrow(sample_mat_mdl), " reactions:", ncol(sample_mat_mdl), "\n")
-print(rowSums(sample_mat_mdl != 0))
-
-keep <- colSums(sample_mat_mdl != 0) > 0
-sample_mat_mdl <- sample_mat_mdl[, keep, drop = FALSE]
-cat("kept reactions:", ncol(sample_mat_mdl), "\n")
-
-cor_mdl <- cor(t(sample_mat_mdl), method = "spearman")
-print(round(cor_mdl, 3))
-
-Heatmap(
-  cor_mdl,
-  name = "rho",
-  col = colorRamp2(c(0.5, 1), c( "white", "#b2182b")),
-  column_title = mdl,
-  show_row_names = TRUE, show_column_names = TRUE
+# 8. Draw
+# --- Save heatmap as PNG ---
+png(
+  filename = "figures/models/exp_constrained/Spearman_heatmap_iCHO3K.png",
+  width = 90,
+  height = 60,
+  units = "mm",
+  res = 600
 )
 
+# draw(ht)
+
+
+
+draw(
+  ht,
+  heatmap_legend_side = "right",
+  annotation_legend_side = "right"
+)
+
+dev.off()
 
 # # reaction-levels dynamics ------------------------------------------------
 # For each model, get top reactions by trajectory class
