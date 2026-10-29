@@ -1,16 +1,47 @@
+
 library(tidyverse)
 source("R/utils/plotting_utils.R", local = FALSE)
 library(ComplexHeatmap)
 library(circlize)  # for color mapping functions
 
-type <- "exp_constrained" # or "GIMME_tpm_25perc" or "exp_constrained"
+type <- "ngam" # or "GIMME_tpm_25perc" or "exp_constrained" or ""ngam"
 
-flux_df <- read_csv(paste0("analysis/models/",type,"/reaction_fluxes_FBA_pFBA.csv")) %>%
+flux_df <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/",type,"/reaction_fluxes_FBA_pFBA(in).csv")) %>%
   mutate(common_name = recode(
     common_name,
     "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
   )) %>%
   filter(common_name == "iCHO3K")
+
+reactions <- c("4HBZCOAFm", "ACACT100m", "ACACT102n3m", "ACACT10m", "ACACT110m", "ACACT120m", 
+               "ACACT121n6m", "ACACT123n3m", "ACACT130m", "ACACT141n7m", "ACACT142n6m", "ACACT143n3m", 
+               "ACACT150m", "ACACT161n9m", "ACACT162n6m", "ACACT163n3m", "ACACT170m", "ACACT182n6m", 
+               "ACACT183n3m", "ACACT183n6m", "ACACT184n3m", "ACACT1rm", "ACACT204n3m", "ACACT204n6m", 
+               "ACACT205n3m", "ACACT224n6m", "ACACT2251n3m", "ACACT226n3m", "ACACT244n6m", "ACACT245n6m", 
+               "ACACT50m", "ACACT70m", "ACACT81n3m", "ACACT90m", "ACACTDMNm", "ACACTMPm", 
+               "ACCOACm", "ACGSM", "ASPNATm", "CITMCOALm", "CSNATm", "FAOXC101_3Em", 
+               "FAOXC101_4Zm", "FAOXC11090m", "FAOXC11", "FAOXC121_3Em", "FAOXC121_3Zm", "FAOXC121_5Em", 
+               "FAOXC121C101m", "FAOXC122_3Z_6Zm", "FAOXC122C101m", "FAOXC130110m", "FAOXC140120m", "FAOXC141_5Em", 
+               "FAOXC141_7Em", "FAOXC142_5Z_8Zm", "FAOXC150130m", "FAOXC1611402m", "FAOXC161802m", "FAOXC161_7Em", 
+               "FAOXC161_7Zm", "FAOXC161_9Em", "FAOXC162_7Z_10Zm", "FAOXC162C142m", "FAOXC163_4Z_7Z_10Zm", "FAOXC163GC142m", 
+               "FAOXC164_4Z_7Z_10Z_13Zm", "FAOXC170150m", "FAOXC180", "FAOXC181_11Em", "FAOXC181_9Em", "FAOXC181_9Zm", 
+               "FAOXC181C161m", "FAOXC182_9Z_12Zm", "FAOXC182C162m", "FAOXC183086m", "FAOXC183_6Z_9Z_12Zm", "FAOXC183C163Gm", 
+               "FAOXC18480m", "FAOXC184_3Z_6Z_9Z_12Zm", "FAOXC184_6Z_9Z_12Z_15Zm", "FAOXC184C163m", "FAOXC200180m", "FAOXC2031836m", 
+               "FAOXC204184m", "FAOXC204", "FAOXC204_5Z_8Zm_11Z_14Zm", "FAOXC204C184m", "FAOXC2051843m", "FAOXC205C185m", 
+               "FAOXC2242046m", "FAOXC2251836m", "FAOXC2252053m", "FAOXC225_4Z_7Z_10Z_13Z_16Zm", "FAOXC225C204m", "FAOXC226", 
+               "FAOXC226C205m", "FAOXC5030m", "FAOXC61_3Zm", "FAOXC7050m", "FAOXC81_5Zm", "FAOXC8C6m", 
+               "FAOXC9070m", "GLYATm", "HMGCOASim", "HMGLm", "HMR_3110", "HMR_3114", 
+               "HMR_3118", "HMR_3173", "HMR_3177", "HMR_3221", "HMR_3225", "HMR_3229", 
+               "HMR_3233", "HMR_3237", "HMR_3243", "HMR_3247", "HMR_3398", "HMR_3406", 
+               "HMR_3407", "HMR_3408", "HMR_3409", "HMR_3411", "HMR_3413", "HMR_3414", 
+               "HMR_3416", "HMR_3421", "HMR_3422", "HMR_3423", "HMR_3424", "HMR_3425", 
+               "HMR_3426", "HMR_3427", "HMR_3428", "HMR_3429", "HMR_3431", "HMR_3432", 
+               "HMR_3433", "HMR_3451", "HMR_3455", "HMR_9719", "MCDm", "MESCOALm", 
+               "MMSAD3m", "r0062", "r0287", "r0639", "r0653", "r0732", 
+               "r1481", "RE1531M", "RE1532M", "RE1533M", "RE1534M", "RE3006M", 
+               "RE3189M", "RE3191M")
+
+reactions <- c("r0321", "OCOAT1m", "HACD1m", "ACACT1m", "SUCGT", "HMGCOAtm", "HMGCH", "APAT2rm", "MMSAD3m", "HMGCOASim")
 
 
 reactions <- c("HEX1", "PGI", "TKT2", "TALA", "TKT1", "RPE",
@@ -19,13 +50,23 @@ reactions <- c("HEX1", "PGI", "TKT2", "TALA", "TKT1", "RPE",
                "PGK",  "PGM", "ENO", "r0122", "PYK", "LDH_D","LDH_L",
                "ALATA_L", "PYRt2m", "PYRtm", "PCm", "CSm", "ACONTam", "ACONTbm", "ICDHyrm",
                "AKGDm","SUCOASm", "SUCD1m", "FUMm", "MDHm",
-               "OCOAT1m", "OAADC", "LDH_Lm", "L_LACtcm", "L_LACt4r")
+               "OCOAT1m", "OAADC", "LDH_Lm", "L_LACtcm", "L_LACt4r",
+               "SUCOAS1m", "SUCGT")
+
+reactions <- c("SUCOASm", "SUCOAS1m")
+
+reactions <- c("LDH_L")
 
 
 # reactions <- c("3SPYRSPm", "CITMCOALm", "DDPGAm", "LDH_Lm", "AGTim", "D3AIBTm", "ME1m", "ME2m", "MERCSULFTm",
 #                "MESCOALm", "r0081", "r0157", "r1464", "SPAm")
 # 
-# reactions <- c("L_LACtcm", "L_LACtm", "LCADim")
+reactions <- c("L_LACtcm", "L_LACtm", "15KPROSTGF2t", "HMR_9622", "L_LACDcm", "L_LACt2r", "L_LACt4r", "L_LACt4r_2", "LACLt", 
+               "LCADi", "OROTi", "r2083", "r2090", "r2097", "r2105", "r2112", "r2117", "r2121", "r2127", 
+               "r2128", "r2129", "r2516")
+
+reactions <- c("L_LACtcm", "L_LACt2r", "L_LACt4r", "LACLt", 
+               "OROTi", "r2097", "r2105", "r2112", "r2117", "r2127")
 # 
 # reactions <- c("15KPROSTGF2t", "L_LACt2r", "L_LACt4r", "L_LACt4r_2", "L_LACtm", "LACLt", "LCADi", "OROTi",
 #                "r2083", "r2090", "r2097", "r2105", "r2112", "r2117", "r2121", "r2127", "r2128", "r2129", "r2516")
@@ -61,13 +102,28 @@ flux_plot_df <- flux_df %>%
   mutate(
     # Reverse pFBA flux sign for selected reactions
     pFBA_Flux = if_else(
-      Reaction %in% c("PGK", "PGM", "ACONTbm", "RPI"),
+      Reaction %in% c("PGK", "PGM", "ACONTbm", "RPI", "SUCOAS1m", "L_LACt2r", "L_LACt4r", "LACLt", "r2127", "SUCOASm"),
       -pFBA_Flux,
       pFBA_Flux
     ),
     Window = factor(Window, levels = 1:5),
     Reaction = factor(Reaction, levels = reactions)
   )
+
+fluc_accoa <- flux_plot_df %>% filter(pFBA_Flux > 0 | pFBA_Flux < 0)
+
+suc_tot <- flux_plot_df %>% group_by(Condition, Window) %>%
+  summarise(difference = pFBA_Flux[Reaction == "SUCOAS1m"] + pFBA_Flux[Reaction == "OCOAT1m"],
+            .groups = "drop")
+
+suc_tot_ngam <- flux_plot_df %>% group_by(Condition, Window) %>%
+  summarise(difference = pFBA_Flux[Reaction == "SUCOAS1m"] + pFBA_Flux[Reaction == "SUCOASm"],
+            .groups = "drop")
+
+lac_tot <- flux_plot_df %>% group_by(Condition, Window) %>%
+  summarise(x_sum = sum(pFBA_Flux),
+            .groups = "drop")
+options(scipen = 999)
 
 reaction_plots <- lapply(reactions, function(rxn) {
   
@@ -103,7 +159,7 @@ reaction_plots <- lapply(reactions, function(rxn) {
 
 names(reaction_plots) <- reactions
 
-reaction_plots[["HEX1"]]
+reaction_plots[["MMSAD3m"]]
 
 reaction_plots[["PGI"]]
 reaction_plots[["PFK"]]
@@ -115,6 +171,8 @@ reaction_plots[["PYRtm"]]
 reaction_plots[["PYRt2m"]]
 reaction_plots[["OAADC"]]
 
+reactions <- c("L_LACtcm", "L_LACt2r", "L_LACt4r", "LACLt", 
+               "OROTi", "r2097", "r2105", "r2112", "r2117", "r2127")
 
 
 
