@@ -6,8 +6,9 @@ library(circlize)  # for color mapping functions
 library(dplyr)
 library(ComplexUpset)
 library(ggplot2)
+library(readxl)
 
-type <- "ngam" # or "GIMME_tpm_25perc" or "exp_constrained" or ""ngam"
+type <- "exp_constrained" # or "GIMME_tpm_25perc" or "exp_constrained" or ""ngam"
 
 ngam <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/",type,"/reaction_fluxes_FBA_pFBA(in).csv")) %>%
   mutate(common_name = recode(
@@ -58,23 +59,23 @@ allDF %>%
   print(n = Inf)
 ### only in ATPM
 
-##### check which reactins are missing in GIMME #####
+##### check which reactions are missing in GIMME ##### where GIMME is NA
 gimmeMissing <- allDF %>% filter(is.na(pFBA_Flux_gimme)) %>%
   select(all_of(common_columns), FBA_Flux_OG, pFBA_Flux_OG, FBA_Flux_ngam, pFBA_Flux_ngam)
 
 ##### select only non-zero reactions in pFBA #####
 gimmeMissingNot0 <- gimmeMissing %>%
   filter(!(pFBA_Flux_OG == 0)) %>%
-  select(all_of(common_columns), FBA_Flux_OG, pFBA_Flux_OG, FBA_Flux_ngam, pFBA_Flux_ngam)
+  select(all_of(common_columns), pFBA_Flux_OG) #FBA_Flux_OG, FBA_Flux_ngam, pFBA_Flux_ngam
 
 ##### check leftover reactions #####
-reaction_counts <- gimmeMissingNot0 %>%
+reaction_counts <- gimmeMissingNot0 %>% #counts how many reactions are there per condition
   distinct(Reaction, Condition, Window) %>%
   count(Condition, Window, name = "n_reactions")
 
 print(reaction_counts)
 
-reaction_overlap <- gimmeMissingNot0 %>%
+reaction_overlap <- gimmeMissingNot0 %>% #shws per reactions in which condition does it occur
   distinct(Reaction, Condition, Window) %>%
   mutate(Group = paste(Condition, Window, sep = "_")) %>%
   select(Reaction, Group) %>%
@@ -92,15 +93,41 @@ upset(
   width_ratio = 0.2
 )
 
+##### selects the reactions only occuring in one condition
 allCondReactions <- gimmeMissingNot0 %>%
   group_by(Reaction) %>%
   filter(n_distinct(paste(Condition, Window)) == 10) %>%
   ungroup() %>%
   as.data.frame()
 
+#### shows in which conditions the reactions are present #####
+reaction_summary <- gimmeMissingNot0 %>%
+  distinct(Reaction, Condition, Window) %>%
+  mutate(Group = paste(Condition, Window, sep = "_"), Present = TRUE) %>%
+  select(Reaction, Group, Present) %>%
+  pivot_wider(names_from = Group, values_from = Present, values_fill = FALSE) %>%
+  mutate(n_conditions = rowSums(across(where(is.logical)))) %>%
+  arrange(desc(n_conditions))
+
+reaction_summary <- reaction_summary %>%
+  mutate(Occurrence = case_when(n_conditions == 10 ~ "All conditions", 
+                                n_conditions == 1 ~ "Unique", 
+                                TRUE ~ "Partial"))
+
 #### After selecting reactions that were removed with GIMME, 14291 reactions were left. From these 552 reactions were non-zero in pFBA-OG. 
 #### Remember that this contains two conditions and 5 windows, so 10 total conditions. Reaction_counts shows how many reactions were in each 
 #### condition. From the upset plot we can see that only 18 reactions overlap between all conditions. See allCondReactions for which reactions are this.
+
+#### import all iCHo3K reactions to see what are these reactions #####
+icho3k <- read_excel("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/iCHO3k_reactions.xlsx")
+
+reaction_summary <- reaction_summary %>%
+  left_join(icho3k %>% select(Reaction, `Reaction Formula`, Subsystem, `EC Number`), by = "Reaction")
+
+#### at this point you should check the expression of these genes to see if there is really no expression or if the GIMME treshold was not correct
+#### Could also check if these proteins are present in the proteomics data
+#### but comparison of which model works best was done on all models combined. Would be worth checking how it preformed for separate conditions
+#### experimentally measured growth rates - TSW5 is negative?
 
 ###########################################################################################################################################
 
