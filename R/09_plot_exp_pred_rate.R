@@ -1,7 +1,7 @@
 source("R/utils/plotting_utils.R", local = FALSE)
 library(tidyverse)
 
-measured <- read_csv("data/rates/growth_rate.csv") 
+measured <- read_csv("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/data/rates/growth_rate.csv") 
 
 # GROWTH rates ------------------------------------------
 ## MEASURED ##
@@ -9,9 +9,9 @@ measured <- read_csv("data/rates/growth_rate.csv")
 #   # filter(AA_meta == "Growth_rate") %>%
 #   mutate(Type = "measured")
 #   # select(!Condition)
-type <- "GIMME_tpm_25perc" # exp_constrained or GIMME_tpm_25perc
+type <- "exp_constrained" # exp_constrained or GIMME_tpm_25perc
 
-predicted <- read_csv(paste0("analysis/models/", type,"/mus_FBA_pFBA.csv"))
+predicted <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/", type,"/mus_FBA_pFBA.csv"))
 
 color_mapping_condition <- c(
   "Constant" = "#E6641E",
@@ -63,7 +63,7 @@ df_plot <- df_long %>%
 ggplot(df_plot, aes(x = avg_growth_µ, y = predicted_mu)) +
   abline_params +
   
-  geom_point(aes(color = Condition, shape = Window), size = 1) +
+  geom_point(aes(color = Condition, shape = Window), size = 5) +
   
   geom_errorbar(
     aes(
@@ -81,12 +81,13 @@ ggplot(df_plot, aes(x = avg_growth_µ, y = predicted_mu)) +
     aes(
       label = paste0("R² = ", sprintf("%.2f", r2)),
       color = Condition
-      # vjust = vjust_pos
+      #vjust = vjust_pos
     ),
     x = -Inf,
     y = Inf,
-    hjust = -0.1,
-    size = 2,
+    #hjust = -1,
+    vjust = 1,
+    size = 5,
     inherit.aes = FALSE,
     show.legend = FALSE
   ) +
@@ -105,10 +106,10 @@ ggplot(df_plot, aes(x = avg_growth_µ, y = predicted_mu)) +
   ) +
   theme_tidy() +
   # theme_bw() +
-  theme(legend.position = "none")
-  #       panel.grid.minor = element_blank(),
-  #       axis.text = element_text(color = "black", size = 11),
-  #       axis.title = element_text(color = "black", size = 11))
+  theme(legend.position = "bottom",
+         panel.grid.minor = element_blank(),
+         axis.text = element_text(color = "black", size = 18),
+         axis.title = element_text(color = "black", size = 18))
 
 ggsave(filename = paste0("figures/models/",type,"/growth_rate_exp_pred_legend.pdf"),
        device = cairo_pdf,
