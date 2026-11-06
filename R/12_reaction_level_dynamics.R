@@ -3,15 +3,106 @@ library(tidyverse)
 source("R/utils/plotting_utils.R", local = FALSE)
 library(ComplexHeatmap)
 library(circlize)  # for color mapping functions
+library(dplyr)
+library(ComplexUpset)
+library(ggplot2)
 
 type <- "ngam" # or "GIMME_tpm_25perc" or "exp_constrained" or ""ngam"
 
-flux_df <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/",type,"/reaction_fluxes_FBA_pFBA(in).csv")) %>%
+ngam <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/",type,"/reaction_fluxes_FBA_pFBA(in).csv")) %>%
   mutate(common_name = recode(
     common_name,
     "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
   )) %>%
   filter(common_name == "iCHO3K")
+
+gimme <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/",type,"/reaction_fluxes_FBA_pFBA.csv")) %>%
+  mutate(common_name = recode(
+    common_name,
+    "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+  )) %>%
+  filter(common_name == "iCHO3K")
+
+OG <- read_csv(paste0("C:/Users/jerne/Filr/Net Folders/BOKU-DFS/DPMT/BTLW/BTLW-TZSY/Borth/Proj/Shared/DigiTherapeutX/Jerneja/9_FBA_Veronika/zenodo_v01/analysis/models/",type,"/reaction_fluxes_FBA_pFBA.csv")) %>%
+  mutate(common_name = recode(
+    common_name,
+    "iCHO3K_cho_prod_generic_unblocked" = "iCHO3K"
+  )) %>%
+  filter(common_name == "iCHO3K")
+
+##### make one big data frame #####
+common_columns <- c("common_name", "Condition", "Window", "Reaction")
+
+ngam <- ngam %>% 
+  select(-model_name) %>%
+  rename_with(~paste0(.x, "_ngam"), -all_of(common_columns))
+
+gimme <- gimme %>% 
+  select(-model_name) %>%
+  rename_with(~paste0(.x, "_gimme"), -all_of(common_columns))
+
+OG <- OG %>% 
+  select(-model_name) %>%
+  rename_with(~paste0(.x, "_OG"), -all_of(common_columns))
+
+allDF <- OG %>%
+  full_join(gimme, by = common_columns) %>%
+  full_join(ngam, by = common_columns)
+
+##### check if there are differences in LB and UB #####
+allDF %>%
+  filter(coalesce(round(FBA_UB_OG, 5) != round(FBA_UB_ngam, 5), FALSE) |
+           coalesce(round(FBA_UB_OG, 5) != round(FBA_UB_gimme, 5), FALSE) |
+           coalesce(round(FBA_UB_ngam, 5) != round(FBA_UB_gimme, 5), FALSE)) %>%
+  select(common_name, Condition, Window, Reaction, FBA_UB_OG, FBA_UB_ngam, FBA_UB_gimme) %>%
+  print(n = Inf)
+### only in ATPM
+
+##### check which reactins are missing in GIMME #####
+gimmeMissing <- allDF %>% filter(is.na(pFBA_Flux_gimme)) %>%
+  select(all_of(common_columns), FBA_Flux_OG, pFBA_Flux_OG, FBA_Flux_ngam, pFBA_Flux_ngam)
+
+##### select only non-zero reactions in pFBA #####
+gimmeMissingNot0 <- gimmeMissing %>%
+  filter(!(pFBA_Flux_OG == 0)) %>%
+  select(all_of(common_columns), FBA_Flux_OG, pFBA_Flux_OG, FBA_Flux_ngam, pFBA_Flux_ngam)
+
+##### check leftover reactions #####
+reaction_counts <- gimmeMissingNot0 %>%
+  distinct(Reaction, Condition, Window) %>%
+  count(Condition, Window, name = "n_reactions")
+
+print(reaction_counts)
+
+reaction_overlap <- gimmeMissingNot0 %>%
+  distinct(Reaction, Condition, Window) %>%
+  mutate(Group = paste(Condition, Window, sep = "_")) %>%
+  select(Reaction, Group) %>%
+  mutate(Present = TRUE) %>%
+  tidyr::pivot_wider(
+    names_from = Group,
+    values_from = Present,
+    values_fill = FALSE
+  )
+
+upset(
+  reaction_overlap,
+  intersect = colnames(reaction_overlap)[-1],
+  name = "Reaction overlap",
+  width_ratio = 0.2
+)
+
+allCondReactions <- gimmeMissingNot0 %>%
+  group_by(Reaction) %>%
+  filter(n_distinct(paste(Condition, Window)) == 10) %>%
+  ungroup() %>%
+  as.data.frame()
+
+#### After selecting reactions that were removed with GIMME, 14291 reactions were left. From these 552 reactions were non-zero in pFBA-OG. 
+#### Remember that this contains two conditions and 5 windows, so 10 total conditions. Reaction_counts shows how many reactions were in each 
+#### condition. From the upset plot we can see that only 18 reactions overlap between all conditions. See allCondReactions for which reactions are this.
+
+###########################################################################################################################################
 
 reactions <- c("4HBZCOAFm", "ACACT100m", "ACACT102n3m", "ACACT10m", "ACACT110m", "ACACT120m", 
                "ACACT121n6m", "ACACT123n3m", "ACACT130m", "ACACT141n7m", "ACACT142n6m", "ACACT143n3m", 
